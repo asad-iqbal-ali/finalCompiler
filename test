@@ -1,0 +1,17 @@
+
+
+int foo(int count){
+	int sum = 0;
+	int i;
+	
+	
+	return i;
+
+
+}
+
+int main(){
+	{
+		return foo(2);
+	}
+}
