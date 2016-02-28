@@ -21,9 +21,9 @@ enum type_ {
 } ;
 
 enum scope_type {
-	ARG,
-	STACK,
-	GLOBAL
+	ARG;
+	STACK;
+	GLOBAL;
 	
 };
 

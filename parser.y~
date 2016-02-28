@@ -175,14 +175,14 @@ type declarator_list ';' 	{
 								tmp2->data[0] = '\0';
 								if(i == 0){
 									if(tmp_sym->type == INTEG)
-										snprintf(tmp2->data, MAXEXPR, "  popl -%d(%%ebp)\n", tmp_sym->location);
+										snprintf(tmp2->data, MAXEXPR, "  popl -%d(%%rbp)\n", tmp_sym->location);
 									else
-										snprintf(tmp2->data, MAXEXPR, "  leal -%d(%%ebp), %%eax\n  pushl %%eax\n  call strncpy\n  movb $0, %d(%%eax)\n  addl $12, %%esp\n", tmp_sym->location, (WORDSIZE*STLEN)-1);
+										snprintf(tmp2->data, MAXEXPR, "  leal -%d(%%rbp), %%eax\n  pushl %%eax\n  call strncpy\n  movb $0, %d(%%eax)\n  addl $12, %%esp\n", tmp_sym->location, (WORDSIZE*STLEN)-1);
 								}
 								else{
 									char *cur = tmp2->data;
 									char *end = cur + MAXEXPR;
-									cur += snprintf(tmp2->data, MAXEXPR, "  leal (%%ebp), %%ecx\n");
+									cur += snprintf(tmp2->data, MAXEXPR, "  leal (%%rbp), %%ecx\n");
 									while(i > 1){
 										cur += snprintf(cur, end-cur,"  leal (%%ecx), %%ecx\n");
 										--i;
@@ -415,14 +415,14 @@ IDENT assignment expression 	{
 					tmp2->data = malloc(sizeof(char)*MAXEXPR);
 					if(i == 0){
 						if(tmp_sym->type == INTEG)
-							snprintf(tmp2->data, MAXEXPR, "  popl %s%d(%%ebp)\n", (tmp_sym->scope == ARG? "":"-"),tmp_sym->location);
+							snprintf(tmp2->data, MAXEXPR, "  popl %s%d(%%rbp)\n", (tmp_sym->scope == ARG? "":"-"),tmp_sym->location);
 						else
-							snprintf(tmp2->data, MAXEXPR, "  leal %s%d(%%ebp), %%eax\n  pushl %%eax\n  call strncpy\n  movb $0, %d(%%eax)\n  addl $12, %%esp\n", (tmp_sym->scope == ARG? "":"-"), tmp_sym->location, (WORDSIZE*STLEN)-1);
+							snprintf(tmp2->data, MAXEXPR, "  leal %s%d(%%rbp), %%eax\n  pushl %%eax\n  call strncpy\n  movb $0, %d(%%eax)\n  addl $12, %%esp\n", (tmp_sym->scope == ARG? "":"-"), tmp_sym->location, (WORDSIZE*STLEN)-1);
 					}
 					else{
 						char *cur = tmp2->data;
 						char *end = cur + MAXEXPR;
-						cur += snprintf(tmp2->data, MAXEXPR, "  leal (%%ebp), %%ecx\n");
+						cur += snprintf(tmp2->data, MAXEXPR, "  leal (%%rbp), %%ecx\n");
 						while(i > 1){
 							cur += snprintf(cur, end-cur,"  leal (%%ecx), %%ecx\n");
 							--i;
@@ -836,11 +836,11 @@ IDENT  {
 		$$->data = malloc(sizeof(char)*MAXEXPR);
 
 		if(i == 0)
-			snprintf($$->data, MAXEXPR, "  pushl %s%d(%%ebp)\n", (tmp_sym->scope == ARG? "":"-"), tmp_sym->location);
+			snprintf($$->data, MAXEXPR, "  pushl %s%d(%%rbp)\n", (tmp_sym->scope == ARG? "":"-"), tmp_sym->location);
 		else{
 			char *cur = $$->data;
 			char *end = cur + MAXEXPR;
-			cur += snprintf($$->data, MAXEXPR, "  leal (%%ebp), %%ecx\n");
+			cur += snprintf($$->data, MAXEXPR, "  leal (%%rbp), %%ecx\n");
 			while(i > 1){
 				cur += snprintf(cur, end-cur,"  leal (%%ecx), %%ecx\n");
 				--i;
@@ -1131,7 +1131,7 @@ void print_instructions(instr *block){
 				break;
 			case RETURN:
 				printf("%s", e->data);
-				printf("  jmp .%s_ret\n", block->function);
+				printf("  jump .%s_ret\n", block->function);
 				break;
 
 			case BLOCK_JUMP:

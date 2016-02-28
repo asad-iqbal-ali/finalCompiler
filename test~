@@ -15,6 +15,6 @@ int foo(int count){
 }
 int main(){
 	
-		return 2;
+		return foo(2);
 	
 }
