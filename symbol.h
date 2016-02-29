@@ -30,6 +30,14 @@ enum scope_type {
 	EXT
 	
 };
+enum compr{
+	INFE,
+	EGA,
+	SU,
+	INFEQUA,
+	SUPEQUA,
+	DIF
+};
 
 typedef struct symbol_{
 	char id[MAXIDLEN];

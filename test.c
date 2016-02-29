@@ -1,12 +1,11 @@
 int main(){
+
 	string s;
-	int t;
 
-	t = 1000;
+	{
+		s = "dasj";
 
-	s =  t + "a";
-
-
+	}
 
 	return 1;
 }
