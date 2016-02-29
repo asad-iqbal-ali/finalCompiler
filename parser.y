@@ -196,9 +196,9 @@ type declarator_list ';' 	{
 								else{
 									char *cur = tmp2->data;
 									char *end = cur + MAXEXPR;
-									cur += snprintf(tmp2->data, MAXEXPR, "  leal (%%ebp), %%ecx\n");
+									cur += snprintf(tmp2->data, MAXEXPR, "  movl (%%ebp), %%ecx\n");
 									while(i > 1){
-										cur += snprintf(cur, end-cur,"  leal (%%ecx), %%ecx\n");
+										cur += snprintf(cur, end-cur,"  movl (%%ecx), %%ecx\n");
 										--i;
 									}
 									if(tmp_sym->type == INTEG)
@@ -441,9 +441,9 @@ IDENT assignment expression 	{
 					else{
 						char *cur = tmp2->data;
 						char *end = cur + MAXEXPR;
-						cur += snprintf(tmp2->data, MAXEXPR, "  leal (%%ebp), %%ecx\n");
+						cur += snprintf(tmp2->data, MAXEXPR, "  movl (%%ebp), %%ecx\n");
 						while(i > 1){
-							cur += snprintf(cur, end-cur, "  leal (%%ecx), %%ecx\n");
+							cur += snprintf(cur, end-cur, "  movl (%%ecx), %%ecx\n");
 							--i;
 						}
 						if(tmp_sym->type == INTEG)
@@ -907,9 +907,9 @@ IDENT  {
 		else{
 			char *cur = $$->data;
 			char *end = cur + MAXEXPR;
-			cur += snprintf($$->data, MAXEXPR, "  leal (%%ebp), %%ecx\n");
+			cur += snprintf($$->data, MAXEXPR, "  movl (%%ebp), %%ecx\n");
 			while(i > 1){
-				cur += snprintf(cur, end-cur,"  leal (%%ecx), %%ecx\n");
+				cur += snprintf(cur, end-cur,"  movl (%%ecx), %%ecx\n");
 				--i;
 			}
 			if(tmp_sym->type == STRIN)

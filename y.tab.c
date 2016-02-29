@@ -1699,9 +1699,9 @@ yyreduce:
 								else{
 									char *cur = tmp2->data;
 									char *end = cur + MAXEXPR;
-									cur += snprintf(tmp2->data, MAXEXPR, "  leal (%%ebp), %%ecx\n");
+									cur += snprintf(tmp2->data, MAXEXPR, "  movl (%%ebp), %%ecx\n");
 									while(i > 1){
-										cur += snprintf(cur, end-cur,"  leal (%%ecx), %%ecx\n");
+										cur += snprintf(cur, end-cur,"  movl (%%ecx), %%ecx\n");
 										--i;
 									}
 									if(tmp_sym->type == INTEG)
@@ -2052,9 +2052,9 @@ yyreduce:
 					else{
 						char *cur = tmp2->data;
 						char *end = cur + MAXEXPR;
-						cur += snprintf(tmp2->data, MAXEXPR, "  leal (%%ebp), %%ecx\n");
+						cur += snprintf(tmp2->data, MAXEXPR, "  movl (%%ebp), %%ecx\n");
 						while(i > 1){
-							cur += snprintf(cur, end-cur, "  leal (%%ecx), %%ecx\n");
+							cur += snprintf(cur, end-cur, "  movl (%%ecx), %%ecx\n");
 							--i;
 						}
 						if(tmp_sym->type == INTEG)
@@ -2693,9 +2693,9 @@ yyreduce:
 		else{
 			char *cur = (yyval.e)->data;
 			char *end = cur + MAXEXPR;
-			cur += snprintf((yyval.e)->data, MAXEXPR, "  leal (%%ebp), %%ecx\n");
+			cur += snprintf((yyval.e)->data, MAXEXPR, "  movl (%%ebp), %%ecx\n");
 			while(i > 1){
-				cur += snprintf(cur, end-cur,"  leal (%%ecx), %%ecx\n");
+				cur += snprintf(cur, end-cur,"  movl (%%ecx), %%ecx\n");
 				--i;
 			}
 			if(tmp_sym->type == STRIN)
