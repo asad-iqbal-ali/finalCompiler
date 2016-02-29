@@ -1,12 +1,12 @@
+extern int foo2(int x);
 
-
-int foo(int count){
+int foo(string s){
 	int sum;
 	int i;
 	
 	sum = 0;
 
-	i = sum + count;
+	
 	
 	
 	return i;
@@ -14,7 +14,9 @@ int foo(int count){
 
 }
 int main(){
-	
-		return foo(2);
+		int s;
+		string t;
+		t = "ahjk";
+		return foo2(s);
 	
 }

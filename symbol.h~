@@ -21,9 +21,10 @@ enum type_ {
 } ;
 
 enum scope_type {
-	ARG;
-	STACK;
-	GLOBAL;
+	ARG,
+	STACK,
+	GLOBAL,
+	EXT
 	
 };
 
@@ -39,6 +40,7 @@ typedef struct symbol_{
 typedef struct exp_{
 	enum type_ type;
 	char *data;
+	enum type_ ret_type;
 	struct exp_ *args;
 	char **a_names;
 	struct exp_ *next;
@@ -77,9 +79,10 @@ int find_symbol(char *sym, symbol **out, sym_table *t);
 void print_sym(char *sym, symbol **table);
 symbol *add_symbol(char *name, enum type_ t, enum type_ *a, enum scope_type scope, sym_table *tbl);
 
-char *print_type(enum type_ t);
-
 void print_instructions(instr *block);
+void print_expr(expr *e, char *function);
+
+char *print_type(enum type_ t);
 void print_table(sym_table *t);
 
 sym_table *create_table(sym_table *loc);

@@ -9,13 +9,15 @@
 	#define MAXEXPR 1024
 	#define MAXSTRNGS 100
 	#define MAXARGS 32
+extern int yylineno;
 
 int yywrap(){
 	return 1;
 }
 
+
 void yyerror(const char *str){
-	fprintf(stderr, "error: %s\n",str);
+	fprintf(stderr, "At line: %d\nerror: %s\n",yylineno,str);
 
 }
 
@@ -83,11 +85,13 @@ symbol *tmp_sym, *tmp_sym2, *current_args;
 %token SHIFTLEFT
 %token MODULO
 
-%type <e> primary_expression expression expression_additive unary_expression expression_postfixee expression_multiplicative argument_expression_list assignment_expression declaration declaration_list function_definition instruction  compound_instruction expression_instruction iteration_instruction select_instruction jump_instruction condition instruction_list cond_instruction
+%type <e> primary_expression expression expression_additive unary_expression expression_postfixee expression_multiplicative argument_expression_list assignment_expression function_definition instruction  compound_instruction expression_instruction iteration_instruction select_instruction jump_instruction condition instruction_list cond_instruction
 %type <s> parameter_declaration parameter_list
 %type <t> type
-%type <d> function_declarator declarator declarator_list 
+%type <d> function_declarator declarator declarator_list declaration declaration_list
 %type <entier> comparison_operator
+
+
 %%
 
 program :  
@@ -97,7 +101,15 @@ external_declaration
 
 external_declaration :  
 declaration 	// Declaration Global			
-| EXTERN declaration {printf(" as extern\n");}// Set Extern attribute			
+| EXTERN declaration {
+			declar *t = $2;
+			int i;
+			while(t != NULL){
+				i = find_symbol($2->id, &tmp_sym, local_table);
+				tmp_sym->scope = EXT;
+				t = t->next;
+			}
+			}// Set Extern attribute			
 | function_definition 
 ;
 
@@ -175,14 +187,14 @@ type declarator_list ';' 	{
 								tmp2->data[0] = '\0';
 								if(i == 0){
 									if(tmp_sym->type == INTEG)
-										snprintf(tmp2->data, MAXEXPR, "  popl -%d(%%rbp)\n", tmp_sym->location);
+										snprintf(tmp2->data, MAXEXPR, "  popl -%d(%%ebp)\n", tmp_sym->location);
 									else
-										snprintf(tmp2->data, MAXEXPR, "  leal -%d(%%rbp), %%eax\n  pushl %%eax\n  call strncpy\n  movb $0, %d(%%eax)\n  addl $12, %%esp\n", tmp_sym->location, (WORDSIZE*STLEN)-1);
+										snprintf(tmp2->data, MAXEXPR, "  leal -%d(%%ebp), %%eax\n  pushl %%eax\n  call strncpy\n  movb $0, %d(%%eax)\n  addl $12, %%esp\n", tmp_sym->location, (WORDSIZE*STLEN)-1);
 								}
 								else{
 									char *cur = tmp2->data;
 									char *end = cur + MAXEXPR;
-									cur += snprintf(tmp2->data, MAXEXPR, "  leal (%%rbp), %%ecx\n");
+									cur += snprintf(tmp2->data, MAXEXPR, "  leal (%%ebp), %%ecx\n");
 									while(i > 1){
 										cur += snprintf(cur, end-cur,"  leal (%%ecx), %%ecx\n");
 										--i;
@@ -233,7 +245,6 @@ type declarator_list ';' 	{
 
 					if(first_instruction != NULL){
 						last_instruction->next = NULL;
-						$$ = first_instruction;
 						tmp = current_block->list;
 						if(tmp == NULL)
 							current_block->list = first_instruction;
@@ -244,7 +255,8 @@ type declarator_list ';' 	{
 
 						}
 					}
-
+				$$ = $2;
+				current_args = NULL;
 				}
 ;
 
@@ -275,6 +287,7 @@ declarator :
 IDENT 			{
 				int i = find_symbol($1, &tmp_sym, local_table);
 				if(tmp_sym != NULL){
+					printf("symbol %s\n", $1);
 					yyerror("symbol already declared");
 					return -1;
 				}
@@ -288,6 +301,7 @@ IDENT 			{
 | IDENT assignment expression {
 				int i = find_symbol($1, &tmp_sym, local_table);
 				if(tmp_sym != NULL){
+					printf("symbol %s\n", $1);
 					yyerror("symbol already declared");
 					return -1;
 				}
@@ -395,7 +409,7 @@ IDENT assignment expression 	{
 						yyerror("symbol not found");
 						return -1;
 					}
-					if(tmp_sym->type != $3->type){
+					if(tmp_sym->type != $3->ret_type){
 						yyerror("conflicting types in assignment expression");
 						return -1;
 					}
@@ -415,22 +429,22 @@ IDENT assignment expression 	{
 					tmp2->data = malloc(sizeof(char)*MAXEXPR);
 					if(i == 0){
 						if(tmp_sym->type == INTEG)
-							snprintf(tmp2->data, MAXEXPR, "  popl %s%d(%%rbp)\n", (tmp_sym->scope == ARG? "":"-"),tmp_sym->location);
+							snprintf(tmp2->data, MAXEXPR, "  popl %s%d(%%ebp)\n", (tmp_sym->scope == ARG? "":"-"),tmp_sym->location);
 						else
-							snprintf(tmp2->data, MAXEXPR, "  leal %s%d(%%rbp), %%eax\n  pushl %%eax\n  call strncpy\n  movb $0, %d(%%eax)\n  addl $12, %%esp\n", (tmp_sym->scope == ARG? "":"-"), tmp_sym->location, (WORDSIZE*STLEN)-1);
+							snprintf(tmp2->data, MAXEXPR, "  popl %%edx\n  pushl $%d\n  pushl %%edx\n  leal %s%d(%%ebp), %%eax\n  pushl %%eax\n  call strncpy\n  movb $0, %d(%%eax)\n  addl $12, %%esp\n", (WORDSIZE*STLEN), (tmp_sym->scope == ARG? "":"-"), tmp_sym->location, (WORDSIZE*STLEN)-1);
 					}
 					else{
 						char *cur = tmp2->data;
 						char *end = cur + MAXEXPR;
-						cur += snprintf(tmp2->data, MAXEXPR, "  leal (%%rbp), %%ecx\n");
+						cur += snprintf(tmp2->data, MAXEXPR, "  leal (%%ebp), %%ecx\n");
 						while(i > 1){
-							cur += snprintf(cur, end-cur,"  leal (%%ecx), %%ecx\n");
+							cur += snprintf(cur, end-cur, "  leal (%%ecx), %%ecx\n");
 							--i;
 						}
 						if(tmp_sym->type == INTEG)
 							cur += snprintf(cur, end-cur, "  popl %s%d(%%ecx)\n", (tmp_sym->scope == ARG? "":"-"),tmp_sym->location);
 						else
-							snprintf(tmp2->data, MAXEXPR, "  leal %s%d(%%ecx), %%eax\n  pushl %%eax\n  call strncpy\n  movb $0, %d(%%eax)\n  addl $12, %%esp\n", (tmp_sym->scope == ARG? "":"-"), tmp_sym->location, (WORDSIZE*STLEN)-1);
+							cur += snprintf(cur, MAXEXPR, "  leal %s%d(%%ecx), %%eax\n  pushl %%eax\n  call strncpy\n  movb $0, %d(%%eax)\n  addl $12, %%esp\n", (tmp_sym->scope == ARG? "":"-"), tmp_sym->location, (WORDSIZE*STLEN)-1);
 		
 					}
 	
@@ -446,9 +460,9 @@ compound_instruction :
 block_start declaration_list instruction_list block_end {
 			$$=$3;
 			}
-| block_start declaration_list block_end {$$ = $2;} 
+| block_start declaration_list block_end {} 
 | block_start instruction_list block_end {$$=$2;}
-| block_start block_end {$$ = NULL;} 
+| block_start block_end {} 
 ;
 
 
@@ -466,7 +480,7 @@ block_start :
 			f_def->function = current_function;
 			f_def->args = current_args;
 			tmp_sym = current_args;
-			while(tmp_sym != NULL){
+			while(tmp_sym != NULL && tmp_sym != NOARGS){
 				add_symbol(tmp_sym->id,tmp_sym->type,NULL,ARG,local_table);
 				
 				tmp_sym = tmp_sym->next;
@@ -593,7 +607,7 @@ EGAL  {$$=EGA;}
 expression :  
 expression_additive {$$=$1;}
 | expression SHIFTLEFT expression_additive {
-								if($1->type != INTEG || $3->type != INTEG){
+								if($1->ret_type != INTEG || $3->ret_type != INTEG){
 								 	yyerror("left shift requires two integer values");
 									return -1;
 								}
@@ -615,7 +629,7 @@ expression_additive {$$=$1;}
 
 							}
 | expression SHIFTRIGHT expression_additive {
-								if($1->type != INTEG || $3->type != INTEG){
+								if($1->ret_type != INTEG || $3->ret_type != INTEG){
 								 	yyerror("right shift requires two integer values");
 									return -1;
 								}
@@ -651,7 +665,23 @@ expression_multiplicative {$$=$1;}
 								while(tmp->next != NULL)
 								tmp = tmp->next;
 								tmp->next = malloc(sizeof(expr));
-								tmp->next->type = ADD;
+								if($1->ret_type == INTEG){
+									if($3->ret_type == INTEG)
+										tmp->next->type = ADDII;
+									else{
+										tmp->next->type = ADDIS;
+										$1->ret_type = STRIN;
+									}
+									
+								}
+								else{
+									if($3->ret_type == STRIN)
+										tmp->next->type = ADDSS;
+									else{
+										tmp->next->type = ADDSI;
+										$3->ret_type = STRIN;
+									}
+								}
 								tmp->next->data = NULL;
 								tmp->next->args = NULL;				
 								tmp->next->next = NULL;
@@ -659,7 +689,7 @@ expression_multiplicative {$$=$1;}
 
 							}
 | expression_additive MINUS expression_multiplicative {
-								if($1->type != INTEG || $3->type != INTEG){
+								if($1->ret_type != INTEG || $3->ret_type != INTEG){
 								 	yyerror("subtraction requires two integer values");
 									return -1;
 								}
@@ -684,7 +714,7 @@ expression_multiplicative {$$=$1;}
 expression_multiplicative :  
 unary_expression{$$=$1;}
 | expression_multiplicative MULTI unary_expression {
-								if($1->type != INTEG || $3->type != INTEG){
+								if($1->ret_type != INTEG || $3->ret_type != INTEG){
 								 	yyerror("multiplication requires two integer values");
 									return -1;
 								}
@@ -706,7 +736,7 @@ unary_expression{$$=$1;}
 
 							}
 | expression_multiplicative DIV unary_expression	{
-								if($1->type != INTEG || $3->type != INTEG){
+								if($1->ret_type != INTEG || $3->ret_type != INTEG){
 								 	yyerror("division requires two integer values");
 									return -1;
 								}
@@ -728,7 +758,7 @@ unary_expression{$$=$1;}
 
 							}
 | expression_multiplicative MODULO unary_expression	{
-								if($1->type != INTEG || $3->type != INTEG){
+								if($1->ret_type != INTEG || $3->ret_type != INTEG){
 								 	yyerror("modulo requires two integer values");
 									return -1;
 								}
@@ -756,8 +786,26 @@ unary_expression:
 expression_postfixee {$$=$1;}
 | MINUS unary_expression {
 			 	$$=$2;
-			
-				strcat($$->data, "  popl %%edx\n  movl $0, %%ecx\n  subl %%edx, ecx\n  push %%ecx\n");
+				if($2->ret_type != INTEG){
+								 	yyerror("minus requires an int");
+									return -1;
+								}
+								tmp = $3;
+			 					tmp2 = tmp->next;
+								while(tmp2 != NULL){
+									tmp = tmp2;
+									tmp2 = tmp2->next;
+			 					}
+			 					tmp->next = $1;
+								while(tmp->next != NULL)
+								tmp = tmp->next;
+								tmp->next = malloc(sizeof(expr));
+								tmp->next->type = SUB;
+								tmp->next->data = NULL;
+								tmp->next->args = NULL;				
+								tmp->next->next = NULL;
+								$$ = $3;
+				strcat($$->data, "  popl %edx\n  movl $0, %ecx\n  subl %edx, %ecx\n  pushl %ecx\n");
 				}
 ;
 
@@ -765,31 +813,33 @@ expression_postfixee :
 primary_expression {$$=$1;}
 | IDENT '(' argument_expression_list')' {
 
-					int i = find_symbol($1, &tmp_sym, local_table);
-					if(tmp_sym == NULL){
-						yyerror("symbol not found");
-						return -1;
-					}
-					$$ = malloc(sizeof(expr));
-					if(tmp_sym->args == NULL){
-						yyerror("expected function call");
-						return -1;
-					}
-					$$->type = tmp_sym->type;
-					$$->data = $1;
-					$$->next = NULL;
-					$$->args = $3;
-
-					tmp = $$->args;
-					i = 0;
-					while(tmp!= NULL || tmp_sym->args[i] != VOID){
-						if(tmp== NULL || tmp_sym->args[i] == VOID || tmp->type != tmp_sym->args[i]){
-							yyerror("function call types do not match function declaration");
+						int i = find_symbol($1, &tmp_sym, local_table);
+						if(tmp_sym == NULL){
+							yyerror("symbol not found");
 							return -1;
 						}
-						tmp = tmp->next;
-						++i;
-					}}
+						$$ = malloc(sizeof(expr));
+						if(tmp_sym->args == NULL){
+							yyerror("expected function call");
+							return -1;
+						}
+						$$->type = tmp_sym->type;
+						$$->data = $1;
+						$$->next = NULL;
+						$$->args = $3;
+/*
+						tmp = $$->args;
+						i = 0;
+
+						while(tmp!= NULL || tmp_sym->args[i] != VOID){
+							if(tmp== NULL || tmp_sym->args[i] == VOID || tmp->type != tmp_sym->args[i]){
+								yyerror("function call types do not match function declaration");
+								return -1;
+							}
+							tmp = tmp->next;
+							++i;
+						}
+*/					}
 | IDENT '(' ')' 			{
 						int i = find_symbol($1, &tmp_sym, local_table);
 						if(tmp_sym == NULL){
@@ -814,11 +864,11 @@ primary_expression {$$=$1;}
 
 argument_expression_list:  
 expression {$$ = $1;}
-| argument_expression_list ',' expression {tmp = $1;
+| argument_expression_list ',' expression {tmp = $3;
 			 while(tmp->next != NULL)
 				tmp = tmp->next;
-			tmp->next= $3;
-			$$ = $1;}
+			tmp->next= $1;
+			$$ = $3;}
 ;
 
 primary_expression :  
@@ -831,21 +881,26 @@ IDENT  {
 	}
 	$$ = malloc(sizeof(expr));
 	$$->type = tmp_sym->type;
+	$$->ret_type = tmp_sym->type;
 	if(tmp_sym->args == NULL){
 		
 		$$->data = malloc(sizeof(char)*MAXEXPR);
 
 		if(i == 0)
-			snprintf($$->data, MAXEXPR, "  pushl %s%d(%%rbp)\n", (tmp_sym->scope == ARG? "":"-"), tmp_sym->location);
+			if(tmp_sym->type == STRIN)
+				snprintf($$->data, MAXEXPR, "  leal %s%d(%%ebp), %%eax\n  pushl %%eax\n", (tmp_sym->scope == ARG? "":"-"), tmp_sym->location);
+			else snprintf($$->data, MAXEXPR, "  pushl %s%d(%%ebp)\n", (tmp_sym->scope == ARG? "":"-"), tmp_sym->location);
 		else{
 			char *cur = $$->data;
 			char *end = cur + MAXEXPR;
-			cur += snprintf($$->data, MAXEXPR, "  leal (%%rbp), %%ecx\n");
+			cur += snprintf($$->data, MAXEXPR, "  leal (%%ebp), %%ecx\n");
 			while(i > 1){
 				cur += snprintf(cur, end-cur,"  leal (%%ecx), %%ecx\n");
 				--i;
 			}
-			cur += snprintf(cur, end-cur, "  pushl %s%d(%%ecx)\n", (tmp_sym->scope == ARG? "":"-"), tmp_sym->location);
+			if(tmp_sym->type == STRIN)
+				cur += snprintf($$->data, MAXEXPR, "  leal %s%d(%%ecx), %%eax\n  pushl %%eax\n", (tmp_sym->scope == ARG? "":"-"), tmp_sym->location);
+			else cur += snprintf(cur, end-cur, "  pushl %s%d(%%ecx)\n", (tmp_sym->scope == ARG? "":"-"), tmp_sym->location);
 		
 		}
 		$$->args = NULL;
@@ -857,6 +912,7 @@ IDENT  {
 | CONST_INT	{
 		$$ = malloc(sizeof(expr));
 		$$->type = INTEG;
+		$$->ret_type = INTEG;
 		$$->args = NULL;
 		$$->data = malloc(sizeof(char)*MAXEXPR);
 		snprintf($$->data, MAXEXPR, "  pushl $%d\n", $1);
@@ -867,9 +923,10 @@ IDENT  {
 		$$ = malloc(sizeof(expr));
 		$$->data = malloc(sizeof(char)*MAXEXPR);
 		$$->type = STRIN;
+		$$->ret_type = STRIN;
 		$$->args = NULL;
 		glb_strings[str_counter] = $1;
-		snprintf($$->data, MAXEXPR, "  pushl $%d\n  pushl $.s%d\n", WORDSIZE*STLEN, str_counter);
+		snprintf($$->data, MAXEXPR, "  pushl $.s%d\n", str_counter);
 		++str_counter;
 		$$->next = NULL;
 		}
@@ -880,6 +937,7 @@ IDENT  {
 
 int main(void) {
 
+	int i;
 	global_table = malloc(sizeof(sym_table));
 	global_table->table = malloc(sizeof(symbol *)*TABLESIZE);
 	global_table->prev = NULL;
@@ -892,7 +950,12 @@ int main(void) {
 	
 
 	yyparse();
-	
+	printf("\t.comm .stracc,%d,%d\n\n",STLEN*WORDSIZE*2,WORDSIZE);
+	if(str_counter > 0){
+		printf(".section\t.rodata\n");
+		for(i = 0; i < str_counter; ++i)
+			printf("\t.s%d:\t.string\t%s\n", i, glb_strings[i]);
+	}
 	while(local_table != NULL)
 		local_table = destroy_table(local_table);
 		
@@ -961,7 +1024,7 @@ symbol *add_symbol(char *name, enum type_ t, enum type_ *a, enum scope_type s, s
 					}
 					else if(s == ARG){	
 						tbl->arg_size += WORDSIZE;
-						symb->location = tbl->arg_size;
+						symb->location = tbl->arg_size + WORDSIZE;
 					}
 					
 					break;
@@ -971,8 +1034,10 @@ symbol *add_symbol(char *name, enum type_ t, enum type_ *a, enum scope_type s, s
 						symb->location = tbl->size;
 					}
 					else if(s == ARG){	
-						tbl->arg_size += WORDSIZE*STLEN;
-						symb->location = tbl->arg_size;
+						tbl->arg_size += WORDSIZE;
+						tbl->size += WORDSIZE*STLEN;
+						symb->location = tbl->size;
+						symb->scope = STACK;
 					}
 					break;
 
@@ -1028,7 +1093,7 @@ symbol *add_symbol(char *name, enum type_ t, enum type_ *a, enum scope_type s, s
 					}
 					else if(s == ARG){	
 						tbl->arg_size += WORDSIZE;
-						symb->location = tbl->arg_size;
+						symb->location = tbl->arg_size + WORDSIZE;
 					}
 					
 					break;
@@ -1038,8 +1103,10 @@ symbol *add_symbol(char *name, enum type_ t, enum type_ *a, enum scope_type s, s
 						symb->location = tbl->size;
 					}
 					else if(s == ARG){	
-						tbl->arg_size += WORDSIZE*STLEN;
-						symb->location = tbl->arg_size;
+						tbl->arg_size += WORDSIZE;
+						tbl->size += WORDSIZE*STLEN;
+						symb->location = tbl->size;
+						symb->scope = STACK;
 					}
 					break;
 			}
@@ -1099,39 +1166,88 @@ sym_table *destroy_table(sym_table *loc){
 
 void print_instructions(instr *block){
 
-	expr *e = block->list;
+	expr *e;
+	symbol *arg, *tmp;
+	int i;
+	int totalargs = 0;
 
 	if(block->prev == NULL)
 		printf(".globl %s\n  .type %s,@function\n%s:\n", block->function, block->function, block->function);
 
 	printf("  enter $%d, $0\n", block->stack_size);
 
+	if(block->prev == NULL){
+		i = 0;
+
+		arg = block->args;
+		while(arg != NULL && arg != NOARGS){
+			++totalargs;
+
+			if(arg->type == STRIN){
+				++i;
+				find_symbol(arg->id, &tmp, local_table);
+				printf("  pushl $128\n  pushl %d(%%ebp)\n  leal -%d(%%ebp) %%eax\n  pushl %%eax\n  call strncpy\n  movb  $0, %d(%%eax)\n  addl $12, %%esp\n",4*(totalargs+1),i*WORDSIZE*STLEN, (WORDSIZE*STLEN)-1);		
+			}
+			arg = arg->next;
+
+		}
+
+	}
+
+	e = block->list;
 	while(e != NULL){
-		switch(e->type){
+		print_expr(e, block->function);
+		e = e->next;
+	}
+
+	if(block->prev == NULL){
+		printf(".%s_ret:\n  leave\n  ret\n\n", block->function);
+		return;
+	}
+	else printf("jump to prev block\n");
+
+
+}
+
+
+void print_expr(expr *e, char *function){
+	expr *argslist[MAXARGS];
+	expr *track;
+	int argcounter;
+	int i;
+	switch(e->type){
 			case LSHIFT:
-				printf("  popl %%ecx\n  popl %%eax\n  sall %%ecx, %%eax\n  push %%eax\n");
+				printf("  popl %%eax\n  popl %%ecx\n  sall %%cl, %%eax\n  pushl %%eax\n");
 				break;
 			case RSHIFT:
-				printf("  popl %%ecx\n  popl %%eax\n  sarl %%ecx, %%eax\n  push %%eax\n");
+				printf("  popl %%eax\n  popl %%ecx\n  sarl %%cl, %%eax\n  pushl %%eax\n");
 				break;
 			case DIV:
-				printf("  movq $0, %%edx\n  popl %%eax\n  popl %%ecx\n  idivl %%ecx\n  push %%eax\n");
+				printf("  movl $0, %%edx\n  popl %%eax\n  popl %%ecx\n  cltd\n  idivl %%ecx\n  pushl %%eax\n");
 				break;
 			case MOD:
-				printf("  movq $0, %%edx\n  popl %%eax\n  popl %%ecx\n  idivl %%ecx\n  push %%edx\n");
+				printf("  movl $0, %%edx\n  popl %%eax\n  popl %%ecx\n  cltd\n  idivl %%ecx\n  pushl %%edx\n");
 				break;
-			case ADD:
-				printf("  popl %%eax\n  popl %%ecx\n  addl %%ecx, %%eax\n  push %%eax\n");
+			case ADDII:
+				printf("  popl %%eax\n  popl %%ecx\n  addl %%ecx, %%eax\n  pushl %%eax\n");
 				break;
+			case ADDSS:
+				printf("  popl %%eax\n  popl %%ecx\n  pushl $%d\n  pushl %%eax\n  pushl $.stracc\n  call strncpy\n  movb $0, %d(%%eax)\n  addl $12, %%esp\n  pushl %%ecx\n  pushl $.stracc\n  call strcat\n  movb $0, %d(%%eax)\n  addl $8, %%esp\n  pushl $.stracc\n", WORDSIZE*STLEN, (WORDSIZE*STLEN)-1, (WORDSIZE*STLEN)-1);
+				break;
+			case ADDIS:
+				printf("  popl %%eax\n  popl %%edx\n  andw $0xff, %%ax\n  movw %%ax, .stracc\n  pushl %%edx\n  pushl $.stracc\n  call strcat\n  movb $0, %d(%%eax)\n  addl $8, %%esp\n  pushl $.stracc\n", (WORDSIZE*STLEN)-1);
+				break;
+			case ADDSI:
+				printf("  popl %%edx\n  popl %%eax\n  andw $0xff, %%ax\n  movw %%ax, .stracc\n  sub $%d, %%esp\n  movl %%esp, %%ecx\n  pushl $.stracc\n  pushl %%ecx\n  call strcpy\n  addl $8, %%esp\n  pushl  $%d\n  pushl  %%edx\n  pushl  $.stracc\n  call strncpy\n  movb $0, %d(%%eax)\n  addl $12, %%esp\n  pushl %%esp\n  pushl $.stracc\n  call strcat\n  movb $0, %d(%%eax)\n  addl $%d, %%esp\n  pushl $.stracc\n", WORDSIZE*STLEN, WORDSIZE*STLEN, (WORDSIZE*STLEN)-1,(WORDSIZE*STLEN)-1, 8+(WORDSIZE*STLEN) );
 			case SUB:
-				printf("  popl %%eax\n  popl %%ecx\n  subl %%ecx, %%eax\n  push %%eax\n");
+				printf("  popl %%eax\n  popl %%ecx\n  subl %%ecx, %%eax\n  pushl %%eax\n");
 				break;
 			case MULT:
-				printf("  popl %%eax\n  popl %%ecx\n  imull %%ecx, %%eax\n  push %%eax\n");
+				printf("  popl %%eax\n  popl %%ecx\n  imull %%ecx, %%eax\n  pushl %%eax\n");
 				break;
 			case RETURN:
 				printf("%s", e->data);
-				printf("  jump .%s_ret\n", block->function);
+				printf("  jmp .%s_ret\n", function);
 				break;
 
 			case BLOCK_JUMP:
@@ -1142,19 +1258,26 @@ void print_instructions(instr *block){
 			default :
 				if(e->args == NULL)
 					printf("%s", e->data);
+				else{
+					argcounter = 0;
+					
+					track = e->args;
+					if(track != NOARG){
+						while(track != NULL){
+							print_expr(track, function);
+							if(track->type == STRIN || track->type == INTEG)
+								++argcounter;
+							else --argcounter;
+							track = track->next;
+						}
+					}
+					printf("  call %s\n", e->data);
+					printf("  pushl %%eax\n");
+					printf("  addl $%d, %%esp\n", argcounter*WORDSIZE);
+						
+				}
 				break;
 	 	}
-		
-
-		e = e->next;
-	}
-
-	if(block->prev == NULL){
-		printf(".%s_ret:\n  leave\n  ret\n\n", block->function);
-		return;
-	}
-	else printf("jump to prev block\n");
-
 
 }
 /*

@@ -1,0 +1,17 @@
+#!/bin/bash
+
+make
+gcc test/$1 lib.o -o b.out
+./b.out > gtest
+gcc -E test/$1 -o prep
+./cstr < prep > test.s
+gcc test.s lib.o
+./a.out > ctest
+NUMLINES=$(diff ctest gtest | wc -l)
+if [ $NUMLINES -eq 0 ] ; then
+	echo "Success!"
+	rm gtest ctest test.s
+else 
+	echo "differences at $NUMLINES lines"
+fi
+rm a.out b.out
