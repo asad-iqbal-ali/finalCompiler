@@ -1,7 +1,7 @@
 .globl main
   .type main,@function
 main:
-  enter $384, $0
+  enter $256, $0
   pushl $.s0
   popl %edx
   pushl $128
@@ -21,10 +21,8 @@ main:
   movb $0, 127(%eax)
   addl $12, %esp
   pushl $.s2
-  popl %edx
-  pushl $128
-  pushl %edx
-  leal -384(%ebp), %eax
+  leal (%ebp), %ecx
+  leal -128(%ecx), %eax
   pushl %eax
   call strncpy
   movb $0, 127(%eax)
@@ -115,7 +113,7 @@ main:
   addl $4, %esp
   leal -256(%ebp), %eax
   pushl %eax
-  leal -384(%ebp), %eax
+  leal -128(%ecx), %eax
   pushl %eax
   leal -128(%ebp), %eax
   pushl %eax
@@ -152,7 +150,7 @@ main:
   addl $4, %esp
   leal -256(%ebp), %eax
   pushl %eax
-  leal -384(%ebp), %eax
+  leal -128(%ecx), %eax
   pushl %eax
   popl %eax
   popl %ecx
@@ -242,7 +240,7 @@ main:
   addl $4, %esp
   leal -256(%ebp), %eax
   pushl %eax
-  leal -384(%ebp), %eax
+  leal -128(%ecx), %eax
   pushl %eax
   leal -128(%ebp), %eax
   pushl %eax
