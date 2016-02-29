@@ -35,7 +35,7 @@ main:
   pushl $.s5
   pushl $.s4
   popl %eax
-  leal -384(%ebp), %ecx
+  popl %ecx
   pushl $128
   pushl %eax
   push $.stracc

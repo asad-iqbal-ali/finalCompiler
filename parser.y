@@ -29,7 +29,7 @@ int str_counter = 0;
 expr *tmp, *tmp2;
 expr *NOARG = 0;
 symbol *NOARGS = 0;
-instr *f_def, *current_block;
+instr *f_def, *current_block, *global_block;
 
 char current_function[MAXIDLEN];
 
@@ -141,8 +141,9 @@ type function_declarator compound_instruction {		declar *t = $2;
 						
 						print_instructions(f_def);
 						f_def = NULL;
-						current_block = NULL;
+						current_block = global_block;
 						current_args = NULL;
+
 
 						}// generate code function
   
@@ -170,7 +171,7 @@ type declarator_list ';' 	{
 
 								int i = find_symbol(t->id, &tmp_sym, local_table);
 								
-								if(tmp_sym->type != t->set->type){
+								if(tmp_sym->type != t->set->ret_type){
 									yyerror("conflicting types in assignment expression");
 									return -1;
 								}
@@ -180,7 +181,8 @@ type declarator_list ';' 	{
 									tmp2 = tmp;
 									tmp = tmp->next;			
 								}
-								tmp2 = malloc(sizeof(expr));
+								tmp2->next = malloc(sizeof(expr));
+								tmp2 = tmp2->next;
 								tmp2->type = SET;
 		
 								tmp2->data = malloc(sizeof(char)*MAXEXPR);
@@ -211,7 +213,7 @@ type declarator_list ';' 	{
 								tmp2->args = NULL;
 
 								while(last_instruction->next != NULL)
-									last_instruction = last_instruction-> next;
+									last_instruction = last_instruction->next;
 							}
 						}
 						else{
@@ -244,19 +246,22 @@ type declarator_list ';' 	{
 					}
 
 					if(first_instruction != NULL){
-						last_instruction->next = NULL;
+
+						last_instruction->next = NULL;		
 						tmp = current_block->list;
-						if(tmp == NULL)
+						if(tmp == NULL){
 							current_block->list = first_instruction;
+						}
 						else{
 							while(tmp->next != NULL)
 								tmp = tmp->next;
 							tmp->next = first_instruction;
 
 						}
-					}
+				}
 				$$ = $2;
 				current_args = NULL;
+
 				}
 ;
 
@@ -523,6 +528,8 @@ block_end :
 		}
 		current_block->stack_size = local_table->size;
 		current_block = current_block->prev;
+		if(current_block == NULL)
+			current_block = global_block;
 		local_table = destroy_table(local_table);
 
 
@@ -949,14 +956,40 @@ int main(void) {
 	global_table->table = malloc(sizeof(symbol *)*TABLESIZE);
 	global_table->prev = NULL;
 	global_table->next = NULL;
+	global_table->size = 0;
 	f_def = NULL;
-	current_block = NULL;
+
+	global_block = malloc(sizeof(instr));
+	global_block->list = NULL;
+	global_block->stack_size = 0;
+	current_block = global_block;
 
 
 	local_table = global_table;
 	
+	
 
 	yyparse();
+
+	global_block->stack_size = global_table->size;
+
+
+	if(global_block->stack_size > 0){
+		printf(".globl start\nstart:\n  enter $%d, $0\n", global_block->stack_size);
+		if(global_block->list != NULL){
+			tmp = global_block->list;
+			while(tmp != NULL){
+				print_expr(tmp, NULL);
+				tmp = tmp->next;
+			}
+
+		}
+
+		printf("  jmp main\n\n");
+
+	}
+
+
 	printf("\t.comm .stracc,%d,%d\n\n",STLEN*WORDSIZE*2,WORDSIZE);
 	printf("\t.comm .strres,%d,%d\n\n",STLEN*WORDSIZE*2,WORDSIZE);
 	if(str_counter > 0){
@@ -1240,13 +1273,13 @@ void print_expr(expr *e, char *function){
 				printf("  popl %%eax\n  popl %%ecx\n  addl %%ecx, %%eax\n  pushl %%eax\n");
 				break;
 			case ADDSS:
-				printf("  popl %%eax\n  popl %%ecx\n  pushl $%d\n  pushl %%eax\n  pushl $.stracc\n  call strncpy\n  movb $0, %d(%%eax)\n  addl $12, %%esp\n  pushl %%ecx\n  pushl $.stracc\n  call strcat\n  movb $0, %d(%%eax)\n  addl $8, %%esp\n  pushl $%d\n  pushl $.stracc\n  pushl  $.strres\n  call strncpy\n  movb $0, %d(%%eax)\n  addl $12, %%esp\n  push $.strres\n", WORDSIZE*STLEN, (WORDSIZE*STLEN)-1, (WORDSIZE*STLEN)-1, (WORDSIZE*STLEN)-1, (WORDSIZE*STLEN)-1);
+				printf("  popl %%eax\n  popl %%ecx\n  pushl $%d\n  pushl %%eax\n  pushl $.stracc\n  call strncpy\n  movb $0, %d(%%eax)\n  addl $12, %%esp\n  pushl %%ecx\n  pushl $.stracc\n  call strcat\n  movb $0, %d(%%eax)\n  addl $8, %%esp\n  pushl $%d\n  pushl $.stracc\n  pushl $.strres\n  call strncpy\n  movb $0, %d(%%eax)\n  addl $12, %%esp\n  push $.strres\n", WORDSIZE*STLEN, (WORDSIZE*STLEN)-1, (WORDSIZE*STLEN)-1, (WORDSIZE*STLEN), (WORDSIZE*STLEN)-1);
 				break;
 			case ADDIS:
-				printf("  popl %%eax\n  popl %%edx\n  andw $0xff, %%ax\n  movw %%ax, .stracc\n  pushl %%edx\n  pushl $.stracc\n  call strcat\n  movb $0, %d(%%eax)\n  addl $8, %%esp\n  pushl $%d\n  pushl $.stracc\n  pushl $.strres\n  call strncpy\n  movb $0, %d(%%eax)\n  addl $12, %%esp\n  push $.strres\n", (WORDSIZE*STLEN)-1, (WORDSIZE*STLEN)-1, (WORDSIZE*STLEN)-1);
+				printf("  popl %%eax\n  popl %%edx\n  andw $0xff, %%ax\n  movw %%ax, .stracc\n  pushl %%edx\n  pushl $.stracc\n  call strcat\n  movb $0, %d(%%eax)\n  addl $8, %%esp\n  pushl $%d\n  pushl $.stracc\n  pushl $.strres\n  call strncpy\n  movb $0, %d(%%eax)\n  addl $12, %%esp\n  push $.strres\n", (WORDSIZE*STLEN)-1, (WORDSIZE*STLEN), (WORDSIZE*STLEN)-1);
 				break;
 			case ADDSI:
-				printf("  popl %%edx\n  popl %%eax\n  andw $0xff, %%ax\n  movw %%ax, .stracc\n  sub $%d, %%esp\n  movl %%esp, %%ecx\n  pushl $.stracc\n  pushl %%ecx\n  call strcpy\n  addl $8, %%esp\n  pushl  $%d\n  pushl  %%edx\n  pushl  $.stracc\n  call strncpy\n  movb $0, %d(%%eax)\n  addl $12, %%esp\n  pushl %%esp\n  pushl $.stracc\n  call strcat\n  movb $0, %d(%%eax)\n  addl $%d, %%esp\n  pushl $%d\n  pushl $.stracc\n  pushl $.strres\n  call strncpy\n  movb $0, %d(%%eax)\n  addl $12, %%esp\n  push $.strres\n", WORDSIZE*STLEN, WORDSIZE*STLEN, (WORDSIZE*STLEN)-1,(WORDSIZE*STLEN)-1, 8+(WORDSIZE*STLEN), (WORDSIZE*STLEN)-1, (WORDSIZE*STLEN)-1 );
+				printf("  popl %%edx\n  popl %%eax\n  andw $0xff, %%ax\n  movw %%ax, .stracc\n  sub $%d, %%esp\n  movl %%esp, %%ecx\n  pushl $.stracc\n  pushl %%ecx\n  call strcpy\n  addl $8, %%esp\n  pushl $%d\n  pushl  %%edx\n  pushl $.stracc\n  call strncpy\n  movb $0, %d(%%eax)\n  addl $12, %%esp\n  pushl %%esp\n  pushl $.stracc\n  call strcat\n  movb $0, %d(%%eax)\n  addl $%d, %%esp\n  pushl $%d\n  pushl $.stracc\n  pushl $.strres\n  call strncpy\n  movb $0, %d(%%eax)\n  addl $12, %%esp\n  push $.strres\n", WORDSIZE*STLEN, WORDSIZE*STLEN, (WORDSIZE*STLEN)-1,(WORDSIZE*STLEN)-1, 8+(WORDSIZE*STLEN), (WORDSIZE*STLEN), (WORDSIZE*STLEN)-1 );
 			case SUB:
 				printf("  popl %%eax\n  popl %%ecx\n  subl %%ecx, %%eax\n  pushl %%eax\n");
 				break;
@@ -1280,8 +1313,8 @@ void print_expr(expr *e, char *function){
 						}
 					}
 					printf("  call %s\n", e->data);
-					printf("  pushl %%eax\n");
 					printf("  addl $%d, %%esp\n", argcounter*WORDSIZE);
+					printf("  pushl %%eax\n");
 						
 				}
 				break;

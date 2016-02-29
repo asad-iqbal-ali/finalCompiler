@@ -1,17 +1,18 @@
 int printd( int i );
 
-int main() {
+ int k = 0;
 
- int i;
+int main() {
+ int i = 2;
  {
  	int j;
 	j = 23;
 	{
-		i = j + 2;
+		k = 2;
+		i = j + k;
 	}
 
  }
+ return i;
 
-
- printd(i);
 }

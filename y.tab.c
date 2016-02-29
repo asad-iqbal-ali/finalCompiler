@@ -98,7 +98,7 @@ int str_counter = 0;
 expr *tmp, *tmp2;
 expr *NOARG = 0;
 symbol *NOARGS = 0;
-instr *f_def, *current_block;
+instr *f_def, *current_block, *global_block;
 
 char current_function[MAXIDLEN];
 
@@ -559,14 +559,14 @@ static const yytype_int8 yyrhs[] =
 /* YYRLINE[YYN] -- source line where rule number YYN was defined.  */
 static const yytype_uint16 yyrline[] =
 {
-       0,    98,    98,    99,   103,   104,   113,   117,   153,   264,
-     265,   269,   270,   278,   279,   287,   301,   315,   319,   329,
-     346,   347,   360,   370,   371,   372,   373,   374,   375,   379,
-     391,   406,   460,   463,   464,   465,   470,   519,   534,   535,
-     548,   549,   553,   557,   558,   559,   563,   598,   602,   603,
-     604,   605,   606,   607,   611,   612,   634,   658,   659,   694,
-     718,   719,   741,   763,   789,   790,   820,   821,   850,   873,
-     874,   882,   919,   929,   940
+       0,    98,    98,    99,   103,   104,   113,   117,   154,   269,
+     270,   274,   275,   283,   284,   292,   306,   320,   324,   334,
+     351,   352,   365,   375,   376,   377,   378,   379,   380,   384,
+     396,   411,   465,   468,   469,   470,   475,   524,   541,   542,
+     555,   556,   560,   564,   565,   566,   570,   605,   609,   610,
+     611,   612,   613,   614,   618,   619,   641,   665,   666,   701,
+     725,   726,   748,   770,   796,   797,   827,   828,   857,   880,
+     881,   889,   926,   936,   947
 };
 #endif
 
@@ -1643,8 +1643,9 @@ yyreduce:
 						
 						print_instructions(f_def);
 						f_def = NULL;
-						current_block = NULL;
+						current_block = global_block;
 						current_args = NULL;
+
 
 						}
     break;
@@ -1652,7 +1653,7 @@ yyreduce:
   case 8:
 
 /* Line 1810 of yacc.c  */
-#line 153 "parser.y"
+#line 154 "parser.y"
     {
 					declar *t = (yyvsp[(2) - (3)].d);
 					int argcount = 1;
@@ -1673,7 +1674,7 @@ yyreduce:
 
 								int i = find_symbol(t->id, &tmp_sym, local_table);
 								
-								if(tmp_sym->type != t->set->type){
+								if(tmp_sym->type != t->set->ret_type){
 									yyerror("conflicting types in assignment expression");
 									return -1;
 								}
@@ -1683,7 +1684,8 @@ yyreduce:
 									tmp2 = tmp;
 									tmp = tmp->next;			
 								}
-								tmp2 = malloc(sizeof(expr));
+								tmp2->next = malloc(sizeof(expr));
+								tmp2 = tmp2->next;
 								tmp2->type = SET;
 		
 								tmp2->data = malloc(sizeof(char)*MAXEXPR);
@@ -1714,7 +1716,7 @@ yyreduce:
 								tmp2->args = NULL;
 
 								while(last_instruction->next != NULL)
-									last_instruction = last_instruction-> next;
+									last_instruction = last_instruction->next;
 							}
 						}
 						else{
@@ -1747,47 +1749,50 @@ yyreduce:
 					}
 
 					if(first_instruction != NULL){
-						last_instruction->next = NULL;
+
+						last_instruction->next = NULL;		
 						tmp = current_block->list;
-						if(tmp == NULL)
+						if(tmp == NULL){
 							current_block->list = first_instruction;
+						}
 						else{
 							while(tmp->next != NULL)
 								tmp = tmp->next;
 							tmp->next = first_instruction;
 
 						}
-					}
+				}
 				(yyval.d) = (yyvsp[(2) - (3)].d);
 				current_args = NULL;
+
 				}
     break;
 
   case 9:
 
 /* Line 1810 of yacc.c  */
-#line 264 "parser.y"
+#line 269 "parser.y"
     {(yyval.t) = INTEG;}
     break;
 
   case 10:
 
 /* Line 1810 of yacc.c  */
-#line 265 "parser.y"
+#line 270 "parser.y"
     {(yyval.t) = STRIN;}
     break;
 
   case 11:
 
 /* Line 1810 of yacc.c  */
-#line 269 "parser.y"
+#line 274 "parser.y"
     {(yyval.d) = (yyvsp[(1) - (1)].d);}
     break;
 
   case 12:
 
 /* Line 1810 of yacc.c  */
-#line 270 "parser.y"
+#line 275 "parser.y"
     {declar *t = (yyvsp[(1) - (3)].d);
 				while(t->next != NULL)
 					t = t->next;
@@ -1798,14 +1803,14 @@ yyreduce:
   case 13:
 
 /* Line 1810 of yacc.c  */
-#line 278 "parser.y"
+#line 283 "parser.y"
     {(yyval.d) = (yyvsp[(1) - (1)].d);}
     break;
 
   case 14:
 
 /* Line 1810 of yacc.c  */
-#line 279 "parser.y"
+#line 284 "parser.y"
     {
 					
 
@@ -1816,7 +1821,7 @@ yyreduce:
   case 15:
 
 /* Line 1810 of yacc.c  */
-#line 287 "parser.y"
+#line 292 "parser.y"
     {
 				int i = find_symbol((yyvsp[(1) - (1)].a), &tmp_sym, local_table);
 				if(tmp_sym != NULL){
@@ -1836,7 +1841,7 @@ yyreduce:
   case 16:
 
 /* Line 1810 of yacc.c  */
-#line 301 "parser.y"
+#line 306 "parser.y"
     {
 				int i = find_symbol((yyvsp[(1) - (3)].a), &tmp_sym, local_table);
 				if(tmp_sym != NULL){
@@ -1856,14 +1861,14 @@ yyreduce:
   case 17:
 
 /* Line 1810 of yacc.c  */
-#line 315 "parser.y"
+#line 320 "parser.y"
     {(yyval.d) = (yyvsp[(1) - (1)].d);}
     break;
 
   case 18:
 
 /* Line 1810 of yacc.c  */
-#line 319 "parser.y"
+#line 324 "parser.y"
     {
 					strcpy(current_function, (yyvsp[(1) - (3)].a));
 				
@@ -1879,7 +1884,7 @@ yyreduce:
   case 19:
 
 /* Line 1810 of yacc.c  */
-#line 329 "parser.y"
+#line 334 "parser.y"
     {
 					strcpy(current_function, (yyvsp[(1) - (4)].a));
 					current_args = (yyvsp[(3) - (4)].s);
@@ -1899,14 +1904,14 @@ yyreduce:
   case 20:
 
 /* Line 1810 of yacc.c  */
-#line 346 "parser.y"
+#line 351 "parser.y"
     {(yyval.s) = (yyvsp[(1) - (1)].s);}
     break;
 
   case 21:
 
 /* Line 1810 of yacc.c  */
-#line 347 "parser.y"
+#line 352 "parser.y"
     {
 						tmp_sym = (yyvsp[(1) - (3)].s);
 						if((yyvsp[(1) - (3)].s) != NULL){
@@ -1923,7 +1928,7 @@ yyreduce:
   case 22:
 
 /* Line 1810 of yacc.c  */
-#line 360 "parser.y"
+#line 365 "parser.y"
     {
 					(yyval.s) = malloc(sizeof(symbol));
 					(yyval.s)->type = (yyvsp[(1) - (2)].t);
@@ -1935,49 +1940,49 @@ yyreduce:
   case 23:
 
 /* Line 1810 of yacc.c  */
-#line 370 "parser.y"
+#line 375 "parser.y"
     {}
     break;
 
   case 24:
 
 /* Line 1810 of yacc.c  */
-#line 371 "parser.y"
+#line 376 "parser.y"
     {(yyval.e)=(yyvsp[(1) - (1)].e);}
     break;
 
   case 25:
 
 /* Line 1810 of yacc.c  */
-#line 372 "parser.y"
+#line 377 "parser.y"
     {(yyval.e)=(yyvsp[(1) - (1)].e);}
     break;
 
   case 26:
 
 /* Line 1810 of yacc.c  */
-#line 373 "parser.y"
+#line 378 "parser.y"
     {(yyval.e)=(yyvsp[(1) - (1)].e);}
     break;
 
   case 27:
 
 /* Line 1810 of yacc.c  */
-#line 374 "parser.y"
+#line 379 "parser.y"
     {(yyval.e)=(yyvsp[(1) - (1)].e);}
     break;
 
   case 28:
 
 /* Line 1810 of yacc.c  */
-#line 375 "parser.y"
+#line 380 "parser.y"
     {(yyval.e)=(yyvsp[(1) - (1)].e);}
     break;
 
   case 29:
 
 /* Line 1810 of yacc.c  */
-#line 379 "parser.y"
+#line 384 "parser.y"
     {
 			tmp = current_block->list;
 			if(tmp == NULL)
@@ -1995,7 +2000,7 @@ yyreduce:
   case 30:
 
 /* Line 1810 of yacc.c  */
-#line 391 "parser.y"
+#line 396 "parser.y"
     {
 				tmp = current_block->list;
 				if(tmp == NULL)
@@ -2013,7 +2018,7 @@ yyreduce:
   case 31:
 
 /* Line 1810 of yacc.c  */
-#line 406 "parser.y"
+#line 411 "parser.y"
     { 
 					int i = find_symbol((yyvsp[(1) - (3)].a), &tmp_sym, local_table);
 					if(tmp_sym == NULL){
@@ -2070,7 +2075,7 @@ yyreduce:
   case 32:
 
 /* Line 1810 of yacc.c  */
-#line 460 "parser.y"
+#line 465 "parser.y"
     {
 			(yyval.e)=(yyvsp[(3) - (4)].e);
 			}
@@ -2079,28 +2084,28 @@ yyreduce:
   case 33:
 
 /* Line 1810 of yacc.c  */
-#line 463 "parser.y"
+#line 468 "parser.y"
     {}
     break;
 
   case 34:
 
 /* Line 1810 of yacc.c  */
-#line 464 "parser.y"
+#line 469 "parser.y"
     {(yyval.e)=(yyvsp[(2) - (3)].e);}
     break;
 
   case 35:
 
 /* Line 1810 of yacc.c  */
-#line 465 "parser.y"
+#line 470 "parser.y"
     {}
     break;
 
   case 36:
 
 /* Line 1810 of yacc.c  */
-#line 470 "parser.y"
+#line 475 "parser.y"
     {
 
 
@@ -2152,7 +2157,7 @@ yyreduce:
   case 37:
 
 /* Line 1810 of yacc.c  */
-#line 519 "parser.y"
+#line 524 "parser.y"
     {
 		if(local_table == global_table){
 			yyerror("No block to close");
@@ -2160,6 +2165,8 @@ yyreduce:
 		}
 		current_block->stack_size = local_table->size;
 		current_block = current_block->prev;
+		if(current_block == NULL)
+			current_block = global_block;
 		local_table = destroy_table(local_table);
 
 
@@ -2170,14 +2177,14 @@ yyreduce:
   case 38:
 
 /* Line 1810 of yacc.c  */
-#line 534 "parser.y"
+#line 541 "parser.y"
     {(yyval.e)=(yyvsp[(1) - (1)].e);}
     break;
 
   case 39:
 
 /* Line 1810 of yacc.c  */
-#line 535 "parser.y"
+#line 542 "parser.y"
     {/*
 			printf("returned\n");
 					tmp = $1;
@@ -2193,35 +2200,35 @@ yyreduce:
   case 42:
 
 /* Line 1810 of yacc.c  */
-#line 553 "parser.y"
+#line 560 "parser.y"
     {(yyval.e)=(yyvsp[(3) - (4)].e);}
     break;
 
   case 43:
 
 /* Line 1810 of yacc.c  */
-#line 557 "parser.y"
+#line 564 "parser.y"
     {printf("while loop\n");}
     break;
 
   case 44:
 
 /* Line 1810 of yacc.c  */
-#line 558 "parser.y"
+#line 565 "parser.y"
     {printf("do/while loop\n");}
     break;
 
   case 45:
 
 /* Line 1810 of yacc.c  */
-#line 559 "parser.y"
+#line 566 "parser.y"
     {printf("for loop ");}
     break;
 
   case 46:
 
 /* Line 1810 of yacc.c  */
-#line 563 "parser.y"
+#line 570 "parser.y"
     {
 			
 
@@ -2259,63 +2266,63 @@ yyreduce:
   case 47:
 
 /* Line 1810 of yacc.c  */
-#line 598 "parser.y"
+#line 605 "parser.y"
     {printf("comparison\n");}
     break;
 
   case 48:
 
 /* Line 1810 of yacc.c  */
-#line 602 "parser.y"
+#line 609 "parser.y"
     {(yyval.entier)=EGA;}
     break;
 
   case 49:
 
 /* Line 1810 of yacc.c  */
-#line 603 "parser.y"
+#line 610 "parser.y"
     {(yyval.entier)=DIF;}
     break;
 
   case 50:
 
 /* Line 1810 of yacc.c  */
-#line 604 "parser.y"
+#line 611 "parser.y"
     {(yyval.entier)=INFE;}
     break;
 
   case 51:
 
 /* Line 1810 of yacc.c  */
-#line 605 "parser.y"
+#line 612 "parser.y"
     {(yyval.entier)=SU;}
     break;
 
   case 52:
 
 /* Line 1810 of yacc.c  */
-#line 606 "parser.y"
+#line 613 "parser.y"
     {(yyval.entier)=INFEQUA;}
     break;
 
   case 53:
 
 /* Line 1810 of yacc.c  */
-#line 607 "parser.y"
+#line 614 "parser.y"
     {(yyval.entier)=SUPEQUA;}
     break;
 
   case 54:
 
 /* Line 1810 of yacc.c  */
-#line 611 "parser.y"
+#line 618 "parser.y"
     {(yyval.e)=(yyvsp[(1) - (1)].e);}
     break;
 
   case 55:
 
 /* Line 1810 of yacc.c  */
-#line 612 "parser.y"
+#line 619 "parser.y"
     {
 								if((yyvsp[(1) - (3)].e)->ret_type != INTEG || (yyvsp[(3) - (3)].e)->ret_type != INTEG){
 								 	yyerror("left shift requires two integer values");
@@ -2343,7 +2350,7 @@ yyreduce:
   case 56:
 
 /* Line 1810 of yacc.c  */
-#line 634 "parser.y"
+#line 641 "parser.y"
     {
 								if((yyvsp[(1) - (3)].e)->ret_type != INTEG || (yyvsp[(3) - (3)].e)->ret_type != INTEG){
 								 	yyerror("right shift requires two integer values");
@@ -2371,14 +2378,14 @@ yyreduce:
   case 57:
 
 /* Line 1810 of yacc.c  */
-#line 658 "parser.y"
+#line 665 "parser.y"
     {(yyval.e)=(yyvsp[(1) - (1)].e);}
     break;
 
   case 58:
 
 /* Line 1810 of yacc.c  */
-#line 659 "parser.y"
+#line 666 "parser.y"
     {
 								
 								tmp = (yyvsp[(3) - (3)].e);
@@ -2419,7 +2426,7 @@ yyreduce:
   case 59:
 
 /* Line 1810 of yacc.c  */
-#line 694 "parser.y"
+#line 701 "parser.y"
     {
 								if((yyvsp[(1) - (3)].e)->ret_type != INTEG || (yyvsp[(3) - (3)].e)->ret_type != INTEG){
 								 	yyerror("subtraction requires two integer values");
@@ -2447,14 +2454,14 @@ yyreduce:
   case 60:
 
 /* Line 1810 of yacc.c  */
-#line 718 "parser.y"
+#line 725 "parser.y"
     {(yyval.e)=(yyvsp[(1) - (1)].e);}
     break;
 
   case 61:
 
 /* Line 1810 of yacc.c  */
-#line 719 "parser.y"
+#line 726 "parser.y"
     {
 								if((yyvsp[(1) - (3)].e)->ret_type != INTEG || (yyvsp[(3) - (3)].e)->ret_type != INTEG){
 								 	yyerror("multiplication requires two integer values");
@@ -2482,7 +2489,7 @@ yyreduce:
   case 62:
 
 /* Line 1810 of yacc.c  */
-#line 741 "parser.y"
+#line 748 "parser.y"
     {
 								if((yyvsp[(1) - (3)].e)->ret_type != INTEG || (yyvsp[(3) - (3)].e)->ret_type != INTEG){
 								 	yyerror("division requires two integer values");
@@ -2510,7 +2517,7 @@ yyreduce:
   case 63:
 
 /* Line 1810 of yacc.c  */
-#line 763 "parser.y"
+#line 770 "parser.y"
     {
 								if((yyvsp[(1) - (3)].e)->ret_type != INTEG || (yyvsp[(3) - (3)].e)->ret_type != INTEG){
 								 	yyerror("modulo requires two integer values");
@@ -2538,14 +2545,14 @@ yyreduce:
   case 64:
 
 /* Line 1810 of yacc.c  */
-#line 789 "parser.y"
+#line 796 "parser.y"
     {(yyval.e)=(yyvsp[(1) - (1)].e);}
     break;
 
   case 65:
 
 /* Line 1810 of yacc.c  */
-#line 790 "parser.y"
+#line 797 "parser.y"
     {
 			 	(yyval.e)=(yyvsp[(2) - (2)].e);
 				if((yyvsp[(2) - (2)].e)->ret_type != INTEG){
@@ -2578,14 +2585,14 @@ yyreduce:
   case 66:
 
 /* Line 1810 of yacc.c  */
-#line 820 "parser.y"
+#line 827 "parser.y"
     {(yyval.e)=(yyvsp[(1) - (1)].e);}
     break;
 
   case 67:
 
 /* Line 1810 of yacc.c  */
-#line 821 "parser.y"
+#line 828 "parser.y"
     {
 
 						int i = find_symbol((yyvsp[(1) - (4)].a), &tmp_sym, local_table);
@@ -2620,7 +2627,7 @@ yyreduce:
   case 68:
 
 /* Line 1810 of yacc.c  */
-#line 850 "parser.y"
+#line 857 "parser.y"
     {
 						int i = find_symbol((yyvsp[(1) - (3)].a), &tmp_sym, local_table);
 						if(tmp_sym == NULL){
@@ -2646,14 +2653,14 @@ yyreduce:
   case 69:
 
 /* Line 1810 of yacc.c  */
-#line 873 "parser.y"
+#line 880 "parser.y"
     {(yyval.e) = (yyvsp[(1) - (1)].e);}
     break;
 
   case 70:
 
 /* Line 1810 of yacc.c  */
-#line 874 "parser.y"
+#line 881 "parser.y"
     {tmp = (yyvsp[(3) - (3)].e);
 			 while(tmp->next != NULL)
 				tmp = tmp->next;
@@ -2664,7 +2671,7 @@ yyreduce:
   case 71:
 
 /* Line 1810 of yacc.c  */
-#line 882 "parser.y"
+#line 889 "parser.y"
     {
 
 	int i = find_symbol((yyvsp[(1) - (1)].a), &tmp_sym, local_table);
@@ -2707,7 +2714,7 @@ yyreduce:
   case 72:
 
 /* Line 1810 of yacc.c  */
-#line 919 "parser.y"
+#line 926 "parser.y"
     {
 		(yyval.e) = malloc(sizeof(expr));
 		(yyval.e)->type = INTEG;
@@ -2723,7 +2730,7 @@ yyreduce:
   case 73:
 
 /* Line 1810 of yacc.c  */
-#line 929 "parser.y"
+#line 936 "parser.y"
     {
 		(yyval.e) = malloc(sizeof(expr));
 		(yyval.e)->data = malloc(sizeof(char)*MAXEXPR);
@@ -2740,14 +2747,14 @@ yyreduce:
   case 74:
 
 /* Line 1810 of yacc.c  */
-#line 940 "parser.y"
+#line 947 "parser.y"
     {(yyval.e) = (yyvsp[(2) - (3)].e);}
     break;
 
 
 
 /* Line 1810 of yacc.c  */
-#line 2751 "y.tab.c"
+#line 2758 "y.tab.c"
       default: break;
     }
   /* User semantic actions sometimes alter yychar, and that requires
@@ -2978,7 +2985,7 @@ yyreturn:
 
 
 /* Line 2071 of yacc.c  */
-#line 943 "parser.y"
+#line 950 "parser.y"
 
 
 int main(void) {
@@ -2988,14 +2995,40 @@ int main(void) {
 	global_table->table = malloc(sizeof(symbol *)*TABLESIZE);
 	global_table->prev = NULL;
 	global_table->next = NULL;
+	global_table->size = 0;
 	f_def = NULL;
-	current_block = NULL;
+
+	global_block = malloc(sizeof(instr));
+	global_block->list = NULL;
+	global_block->stack_size = 0;
+	current_block = global_block;
 
 
 	local_table = global_table;
 	
+	
 
 	yyparse();
+
+	global_block->stack_size = global_table->size;
+
+
+	if(global_block->stack_size > 0){
+		printf(".globl start\nstart:\n  enter $%d, $0\n", global_block->stack_size);
+		if(global_block->list != NULL){
+			tmp = global_block->list;
+			while(tmp != NULL){
+				print_expr(tmp, NULL);
+				tmp = tmp->next;
+			}
+
+		}
+
+		printf("  jmp main\n\n");
+
+	}
+
+
 	printf("\t.comm .stracc,%d,%d\n\n",STLEN*WORDSIZE*2,WORDSIZE);
 	printf("\t.comm .strres,%d,%d\n\n",STLEN*WORDSIZE*2,WORDSIZE);
 	if(str_counter > 0){
@@ -3279,13 +3312,13 @@ void print_expr(expr *e, char *function){
 				printf("  popl %%eax\n  popl %%ecx\n  addl %%ecx, %%eax\n  pushl %%eax\n");
 				break;
 			case ADDSS:
-				printf("  popl %%eax\n  popl %%ecx\n  pushl $%d\n  pushl %%eax\n  pushl $.stracc\n  call strncpy\n  movb $0, %d(%%eax)\n  addl $12, %%esp\n  pushl %%ecx\n  pushl $.stracc\n  call strcat\n  movb $0, %d(%%eax)\n  addl $8, %%esp\n  pushl $%d\n  pushl $.stracc\n  pushl  $.strres\n  call strncpy\n  movb $0, %d(%%eax)\n  addl $12, %%esp\n  push $.strres\n", WORDSIZE*STLEN, (WORDSIZE*STLEN)-1, (WORDSIZE*STLEN)-1, (WORDSIZE*STLEN)-1, (WORDSIZE*STLEN)-1);
+				printf("  popl %%eax\n  popl %%ecx\n  pushl $%d\n  pushl %%eax\n  pushl $.stracc\n  call strncpy\n  movb $0, %d(%%eax)\n  addl $12, %%esp\n  pushl %%ecx\n  pushl $.stracc\n  call strcat\n  movb $0, %d(%%eax)\n  addl $8, %%esp\n  pushl $%d\n  pushl $.stracc\n  pushl $.strres\n  call strncpy\n  movb $0, %d(%%eax)\n  addl $12, %%esp\n  push $.strres\n", WORDSIZE*STLEN, (WORDSIZE*STLEN)-1, (WORDSIZE*STLEN)-1, (WORDSIZE*STLEN), (WORDSIZE*STLEN)-1);
 				break;
 			case ADDIS:
-				printf("  popl %%eax\n  popl %%edx\n  andw $0xff, %%ax\n  movw %%ax, .stracc\n  pushl %%edx\n  pushl $.stracc\n  call strcat\n  movb $0, %d(%%eax)\n  addl $8, %%esp\n  pushl $%d\n  pushl $.stracc\n  pushl $.strres\n  call strncpy\n  movb $0, %d(%%eax)\n  addl $12, %%esp\n  push $.strres\n", (WORDSIZE*STLEN)-1, (WORDSIZE*STLEN)-1, (WORDSIZE*STLEN)-1);
+				printf("  popl %%eax\n  popl %%edx\n  andw $0xff, %%ax\n  movw %%ax, .stracc\n  pushl %%edx\n  pushl $.stracc\n  call strcat\n  movb $0, %d(%%eax)\n  addl $8, %%esp\n  pushl $%d\n  pushl $.stracc\n  pushl $.strres\n  call strncpy\n  movb $0, %d(%%eax)\n  addl $12, %%esp\n  push $.strres\n", (WORDSIZE*STLEN)-1, (WORDSIZE*STLEN), (WORDSIZE*STLEN)-1);
 				break;
 			case ADDSI:
-				printf("  popl %%edx\n  popl %%eax\n  andw $0xff, %%ax\n  movw %%ax, .stracc\n  sub $%d, %%esp\n  movl %%esp, %%ecx\n  pushl $.stracc\n  pushl %%ecx\n  call strcpy\n  addl $8, %%esp\n  pushl  $%d\n  pushl  %%edx\n  pushl  $.stracc\n  call strncpy\n  movb $0, %d(%%eax)\n  addl $12, %%esp\n  pushl %%esp\n  pushl $.stracc\n  call strcat\n  movb $0, %d(%%eax)\n  addl $%d, %%esp\n  pushl $%d\n  pushl $.stracc\n  pushl $.strres\n  call strncpy\n  movb $0, %d(%%eax)\n  addl $12, %%esp\n  push $.strres\n", WORDSIZE*STLEN, WORDSIZE*STLEN, (WORDSIZE*STLEN)-1,(WORDSIZE*STLEN)-1, 8+(WORDSIZE*STLEN), (WORDSIZE*STLEN)-1, (WORDSIZE*STLEN)-1 );
+				printf("  popl %%edx\n  popl %%eax\n  andw $0xff, %%ax\n  movw %%ax, .stracc\n  sub $%d, %%esp\n  movl %%esp, %%ecx\n  pushl $.stracc\n  pushl %%ecx\n  call strcpy\n  addl $8, %%esp\n  pushl $%d\n  pushl  %%edx\n  pushl $.stracc\n  call strncpy\n  movb $0, %d(%%eax)\n  addl $12, %%esp\n  pushl %%esp\n  pushl $.stracc\n  call strcat\n  movb $0, %d(%%eax)\n  addl $%d, %%esp\n  pushl $%d\n  pushl $.stracc\n  pushl $.strres\n  call strncpy\n  movb $0, %d(%%eax)\n  addl $12, %%esp\n  push $.strres\n", WORDSIZE*STLEN, WORDSIZE*STLEN, (WORDSIZE*STLEN)-1,(WORDSIZE*STLEN)-1, 8+(WORDSIZE*STLEN), (WORDSIZE*STLEN), (WORDSIZE*STLEN)-1 );
 			case SUB:
 				printf("  popl %%eax\n  popl %%ecx\n  subl %%ecx, %%eax\n  pushl %%eax\n");
 				break;
@@ -3319,8 +3352,8 @@ void print_expr(expr *e, char *function){
 						}
 					}
 					printf("  call %s\n", e->data);
-					printf("  pushl %%eax\n");
 					printf("  addl $%d, %%esp\n", argcounter*WORDSIZE);
+					printf("  pushl %%eax\n");
 						
 				}
 				break;

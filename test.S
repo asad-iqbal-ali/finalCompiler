@@ -1,133 +1,48 @@
 .globl main
   .type main,@function
 main:
-  enter $8, $0
-  pushl $45000
+  enter $4, $0
+  pushl $2
   popl -4(%ebp)
-  pushl $123
-  pushl $0
+  enter $4, $0
+  pushl $23
+  popl -4(%ebp)
+  enter $0, $0
+  pushl $2
+  leal (%ebp), %ecx
+  leal (%ecx), %ecx
+  leal (%ecx), %ecx
+  popl -4(%ecx)
+  leal (%ebp), %ecx
+  leal (%ecx), %ecx
+  leal (%ecx), %ecx
+  pushl -4(%ecx)
+  leal (%ebp), %ecx
+  pushl -4(%ecx)
   popl %eax
   popl %ecx
-  subl %ecx, %eax
+  addl %ecx, %eax
   pushl %eax
-  popl -8(%ebp)
-  pushl -8(%ebp)
+  leal (%ebp), %ecx
+  leal (%ecx), %ecx
+  popl -4(%ecx)
+  leave
+  leave
   pushl -4(%ebp)
-  popl %eax
-  popl %ecx
-  addl %ecx, %eax
-  pushl %eax
-  call printd
-  pushl %eax
-  addl $4, %esp
-  pushl -8(%ebp)
-  pushl $45000
-  popl %eax
-  popl %ecx
-  addl %ecx, %eax
-  pushl %eax
-  call printd
-  pushl %eax
-  addl $4, %esp
-  pushl $123
-  pushl -4(%ebp)
-  popl %eax
-  popl %ecx
-  addl %ecx, %eax
-  pushl %eax
-  call printd
-  pushl %eax
-  addl $4, %esp
-  pushl $123
-  pushl $45000
-  popl %eax
-  popl %ecx
-  addl %ecx, %eax
-  pushl %eax
-  call printd
-  pushl %eax
-  addl $4, %esp
-  pushl $0
-  pushl -8(%ebp)
-  popl %eax
-  popl %ecx
-  addl %ecx, %eax
-  pushl %eax
-  pushl -4(%ebp)
-  popl %eax
-  popl %ecx
-  addl %ecx, %eax
-  pushl %eax
-  call printd
-  pushl %eax
-  addl $4, %esp
-  pushl -8(%ebp)
-  pushl $0
-  pushl -4(%ebp)
-  popl %eax
-  popl %ecx
-  addl %ecx, %eax
-  pushl %eax
-  popl %eax
-  popl %ecx
-  addl %ecx, %eax
-  pushl %eax
-  call printd
-  pushl %eax
-  addl $4, %esp
-  pushl $0
-  pushl -8(%ebp)
-  popl %eax
-  popl %ecx
-  addl %ecx, %eax
-  pushl %eax
-  pushl $0
-  pushl -4(%ebp)
-  popl %eax
-  popl %ecx
-  addl %ecx, %eax
-  pushl %eax
-  popl %eax
-  popl %ecx
-  addl %ecx, %eax
-  pushl %eax
-  call printd
-  pushl %eax
-  addl $4, %esp
-  pushl $123
-  pushl $0
-  pushl -4(%ebp)
-  popl %eax
-  popl %ecx
-  addl %ecx, %eax
-  pushl %eax
-  popl %eax
-  popl %ecx
-  addl %ecx, %eax
-  pushl %eax
-  call printd
-  pushl %eax
-  addl $4, %esp
-  pushl $0
-  pushl -8(%ebp)
-  popl %eax
-  popl %ecx
-  addl %ecx, %eax
-  pushl %eax
-  pushl $45000
-  popl %eax
-  popl %ecx
-  addl %ecx, %eax
-  pushl %eax
-  call printd
-  pushl %eax
-  addl $4, %esp
-  pushl $0
   popl %eax
   jmp .main_ret
 .main_ret:
   leave
   ret
 
+.globl start
+start:
+  enter $4, $0
+  pushl $0
+  popl -4(%ebp)
+  jmp main
+
 	.comm .stracc,256,4
+
+	.comm .strres,256,4
 

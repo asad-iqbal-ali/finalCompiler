@@ -7,11 +7,11 @@ extern int printf( string s );
 
 
 
-string u;
 
 int main() {
   string s;
   string t;
+string u;
 
   s = "hello";
   t = " world\n";
