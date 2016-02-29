@@ -497,7 +497,10 @@ block_start :
 				tmp->next = malloc(sizeof(expr));
 				tmp = tmp->next;
 			}
-			else tmp = malloc(sizeof(expr));
+			else {
+				current_block->list = malloc(sizeof(expr));
+				tmp = current_block->list;
+			}
 			tmp->type = BLOCK_JUMP;
 			tmp->next = NULL;
 			tmp->block = malloc(sizeof(instr));
@@ -566,7 +569,7 @@ RETURN expression ';' {
 				tmp = tmp->next;			
 			}
 			tmp2->next = malloc(sizeof(expr));
-			tmp2->next->type = RETURN;
+			tmp2->next->type = RET;
 			if($2 != NULL){
 				tmp2->next->data = malloc(sizeof(char)*MAXEXPR);
 				snprintf(tmp2->next->data, MAXEXPR, "  popl %%eax\n");
@@ -750,7 +753,7 @@ unary_expression{$$=$1;}
 								while(tmp->next != NULL)
 								tmp = tmp->next;
 								tmp->next = malloc(sizeof(expr));
-								tmp->next->type = DIV;
+								tmp->next->type = DIVI;
 								tmp->next->data = NULL;
 								tmp->next->args = NULL;				
 								tmp->next->next = NULL;
@@ -1208,7 +1211,7 @@ void print_instructions(instr *block){
 		printf(".%s_ret:\n  leave\n  ret\n\n", block->function);
 		return;
 	}
-	else printf("jump to prev block\n");
+	else printf("  leave\n");
 
 
 }
@@ -1226,7 +1229,7 @@ void print_expr(expr *e, char *function){
 			case RSHIFT:
 				printf("  popl %%eax\n  popl %%ecx\n  sarl %%cl, %%eax\n  pushl %%eax\n");
 				break;
-			case DIV:
+			case DIVI:
 				printf("  movl $0, %%edx\n  popl %%eax\n  popl %%ecx\n  cltd\n  idivl %%ecx\n  pushl %%eax\n");
 				break;
 			case MOD:
@@ -1249,7 +1252,7 @@ void print_expr(expr *e, char *function){
 			case MULT:
 				printf("  popl %%eax\n  popl %%ecx\n  imull %%ecx, %%eax\n  pushl %%eax\n");
 				break;
-			case RETURN:
+			case RET:
 				printf("%s", e->data);
 				printf("  jmp .%s_ret\n", function);
 				break;

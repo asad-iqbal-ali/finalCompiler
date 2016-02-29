@@ -7,7 +7,7 @@ int main() {
  	int j;
 	j = 23;
 	{
-		i = j + 2;
+		i = j + 2
 	}
 
  }

@@ -6,7 +6,10 @@ void yyerror(const char *str);
 enum type_ {
 	LSHIFT,
 	RSHIFT,
-	ADD,
+	ADDII,
+	ADDSI,
+	ADDSS,
+	ADDIS,
 	SUB,
 	MULT,
 	DIV,
