@@ -50,53 +50,6 @@ do
 
 done
 
-for f in output/*;
-do	
-	gcc $f lib.o -o b.out -m32
 
-	if [[ $? -ne 0 ]] ; then
-		echo "$f: Failed - gcc compilation failed"
-		continue
-	fi
-	./b.out > gtest
-	if [[ $? -ne 0 ]] ; then
-		echo "$f: Failed - gcc execution failed"
-		continue
-	fi
-
-	gcc -E $f -o prep
-	if [[ $? -ne 0 ]] ; then
-		echo "$f: Failed - preprocessing failed"
-		continue
-	fi
-
-	./cstr < prep > test.s
-	if [[ $? -ne 0 ]] ; then
-		echo "$f: Failed - cstr failed to generate code"
-		continue
-	fi
-
-	gcc test.s lib.o -m32
-	if [[ $? -ne 0 ]] ; then
-		echo "$f: Failed - gcc couldn't compile cstr's code"
-		continue
-	fi
-
-	./a.out > ctest
-	if [[ $? -ne 0 ]] ; then
-		echo "$f: Failed - cstr code failed on execution"
-		continue
-	fi
-
-	NUMLINES=$(diff ctest gtest | wc -l)
-
-	if [ $NUMLINES -eq 0 ] ; then
-		echo "$f: Success!"
-		rm gtest ctest test.s
-	else 
-		echo "$f: Failed - differing output"
-	fi
-
-done
 
 	rm a.out b.out prep

@@ -32,7 +32,7 @@ expr *tmp2;
 expr *elseflag = 0;
 expr *NOARG = 0;
 symbol *NOARGS = 0;
-instr *f_def, *current_block, *last_block, *global_block;
+instr *f_def, *current_block, *last_block;
 
 char current_function[MAXIDLEN];
 
@@ -118,13 +118,14 @@ declaration 	// Declaration Global
 ;
 
 function_definition :  
-type function_declarator compound_instruction {		
-						find_symbol($2->id, &tmp_sym, local_table);
-						tmp_sym->type = $1;						
+type function_declarator compound_instruction {								
 						
+						int i = find_symbol($2->id, &tmp_sym, local_table);
+						tmp_sym->type = $1;
 						print_instructions(f_def);
+						
 						f_def = NULL;
-						current_block = global_block;
+						current_block = NULL;
 						current_args = NULL;
 
 
@@ -218,8 +219,8 @@ type declarator_list ';' 	{
 ;
 
 type :  
-INT	{$$ = INTEG; current_type = INTEG;} 					// set INT
-| STRING 	{$$ = STRIN; current_type = STRIN;}		// set String
+INT	{$$ = INTEG; current_type = $$;} 					// set INT
+| STRING 	{$$ = STRIN; current_type = $$;}		// set String
 ;
 
 declarator_list :  
@@ -273,7 +274,11 @@ IDENT 			{
 ;
 
 function_declarator :  
-IDENT '(' ')' 			{	enum type_ argtype;
+IDENT '(' ')' 			{	enum type_ *argtype;
+					argtype = malloc(sizeof(enum type_));
+
+					*argtype = VOID;
+					
 					strcpy(current_function, $1);
 				
 					$$ = malloc(sizeof(declar));
@@ -283,9 +288,8 @@ IDENT '(' ')' 			{	enum type_ argtype;
 					$$->next = NULL;
 					
 		
-					argtype = VOID;
 						
-					tmp_sym = add_symbol($1, current_type, &argtype, GLOBAL, global_table);
+					tmp_sym = add_symbol($1, current_type, argtype, GLOBAL, global_table);
 	
 				}	// Create function name
 | IDENT '(' parameter_list ')'  {	int argcount = 1;
@@ -384,8 +388,6 @@ expression ';'  {
 			current_block->stack_size = local_table->size;
 			last_block = current_block;
 			current_block = current_block->prev;
-			if(current_block == NULL)
-				current_block = global_block;
 
 			$$ = last_block;
 		}
@@ -417,8 +419,6 @@ expression ';'  {
 				current_block->stack_size = local_table->size;
 				last_block = current_block;
 				current_block = current_block->prev;
-				if(current_block == NULL)
-					current_block = global_block;
 
 				$$ = last_block;
 			    }
@@ -428,7 +428,7 @@ assignment_expression :
 IDENT assignment expression 	{ 
 					int i = find_symbol($1, &tmp_sym, local_table);
 					if(tmp_sym == NULL){
-						yyerror("symbol not found");
+						yyerror("symbol not found 4");
 						return -1;
 					}
 					if(tmp_sym->type != $3->ret_type){
@@ -480,7 +480,6 @@ block_start declaration_list instruction_list block_end {
 block_start :  
 '{'	{
 
-
 		local_table = create_table(local_table);
 		if(f_def == NULL){
 			f_def = malloc(sizeof(instr));
@@ -525,6 +524,7 @@ block_start :
 		}
 
 
+
 	}// Init your hash table - symbol table
 ;
 
@@ -537,8 +537,7 @@ block_end :
 		current_block->stack_size = local_table->size;
 		last_block = current_block;
 		current_block = current_block->prev;
-		if(current_block == NULL)
-			current_block = global_block;
+		
 		local_table = destroy_table(local_table);
 
 
@@ -933,7 +932,7 @@ primary_expression {$$=$1;}
 
 						int i = find_symbol($1, &tmp_sym, local_table);
 						if(tmp_sym == NULL){
-							yyerror("symbol not found");
+							yyerror("symbol not found 3");
 							return -1;
 						}
 						$$ = malloc(sizeof(expr));
@@ -946,23 +945,12 @@ primary_expression {$$=$1;}
 						$$->data = $1;
 						$$->next = NULL;
 						$$->args = $3;
-/*
-						tmp = $$->args;
-						i = 0;
 
-						while(tmp!= NULL || tmp_sym->args[i] != VOID){
-							if(tmp== NULL || tmp_sym->args[i] == VOID || tmp->type != tmp_sym->args[i]){
-								yyerror("function call types do not match function declaration");
-								return -1;
-							}
-							tmp = tmp->next;
-							++i;
-						}
-*/					}
+					}
 | IDENT '(' ')' 			{
 						int i = find_symbol($1, &tmp_sym, local_table);
 						if(tmp_sym == NULL){
-							yyerror("symbol not found");
+							yyerror("symbol not found 1");
 							return -1;
 						}
 						$$ = malloc(sizeof(expr));
@@ -996,12 +984,14 @@ IDENT  {
 
 	int i = find_symbol($1, &tmp_sym, local_table);
 	if(tmp_sym == NULL){
-		yyerror("symbol not found");
+		yyerror("symbol not found 2");
 		return -1;
 	}
 	$$ = malloc(sizeof(expr));
+
 	$$->type = tmp_sym->type;
 	$$->ret_type = tmp_sym->type;
+
 	if(tmp_sym->args == NULL){
 		
 		$$->data = malloc(sizeof(char)*MAXEXPR);
@@ -1053,16 +1043,17 @@ int main(void) {
 	int i;
 	global_table = malloc(sizeof(sym_table));
 	global_table->table = malloc(sizeof(symbol *)*TABLESIZE);
+	for(i = 0; i < TABLESIZE; ++i)
+		global_table->table[i] = NULL;
 	global_table->prev = NULL;
 	global_table->next = NULL;
 	global_table->size = 0;
-	f_def = NULL;
+	local_table = global_table;
 
-	global_block = malloc(sizeof(instr));
-	global_block->f = NULL;
-	global_block->list = NULL;
-	global_block->stack_size = 0;
-	current_block = global_block;
+	f_def = NULL;
+	current_block = NULL;
+
+
 
 
 	local_table = global_table;
@@ -1071,19 +1062,6 @@ int main(void) {
 
 	yyparse();
 
-	global_block->stack_size = global_table->size;
-
-
-	if(global_block->list != NULL){
-		printf(".globl start\nstart:\n  enter $0, $0\n");
-		tmp = global_block->list;
-		while(tmp != NULL){
-			print_expr(tmp, NULL);
-			tmp = tmp->next;
-		}	
-		printf("  jmp main\n\n");
-
-	}
 
 	for(i = 0; i < TABLESIZE; ++i){
 		tmp_sym = global_table->table[i];
@@ -1101,6 +1079,7 @@ int main(void) {
 		for(i = 0; i < str_counter; ++i)
 			printf("\t.s%d:\t.string\t%s\n", i, glb_strings[i]);
 	}
+
 	while(local_table != NULL)
 		local_table = destroy_table(local_table);
 		
@@ -1202,7 +1181,6 @@ symbol *add_symbol(char *name, enum type_ t, enum type_ *a, enum scope_type s, s
 			if(track->args != NULL || symb->args != NULL){
 				if(track->args == NULL || symb->args == NULL){
 						yyerror("Conflicting function definitions 1");
-						printf("looked up %s, equal to %s\n", symb->id, track->id);
 						return NULL;
 					}
 				else{
@@ -1266,7 +1244,7 @@ symbol *add_symbol(char *name, enum type_ t, enum type_ *a, enum scope_type s, s
 
 
 sym_table *create_table(sym_table *loc){
-	
+
 	int i;
 	if(loc->next != NULL){
 		yyerror("Creating table in middle of list");
@@ -1275,13 +1253,16 @@ sym_table *create_table(sym_table *loc){
 	
 	loc->next = malloc(sizeof(sym_table));
 	loc->next->table = malloc(sizeof(symbol *)*TABLESIZE);
+
 	for(i = 0; i < TABLESIZE; ++i)
 		loc->next->table[i] = NULL;
+
 	loc->next->prev = loc;
 	loc->next->next = NULL;
-	loc->next->size = loc->size;
+	if(loc != global_table)
+		loc->next->size = loc->size;
+	else loc->next->size = 0;
 	loc->next->arg_size = 0;
-	return loc->next;
 
 }
 
@@ -1300,14 +1281,14 @@ sym_table *destroy_table(sym_table *loc){
 			s_track = s_next;
 		}
 	}
-	if(ret != NULL){
+	if(ret != NULL && ret != global_table){
 		ret->size = loc->size;
-		ret->next = NULL;
-	}
 
+	}
+	if(ret != NULL)
+		ret->next = NULL;
 	free(loc->table);
 	free(loc);
-	
 	return ret;
 }
 
@@ -1529,16 +1510,15 @@ void print_expr(expr *e, char *function){
 					printf("  call %s\n", e->data);
 					printf("  addl $%d, %%esp\n", argcounter*WORDSIZE);
 
-					if(e->ret_type != STRIN)
-						printf("  pushl %%eax\n");
-					else{
+					if(e->type == STRIN){
 						
-						printf("  movl %%esp, %%ebx\n  subl $4, %%ebx\n  subl $128, %%esp\n  movl %%esp, %%edx\n  pushl $128\n  pushl %%eax\n  pushl %%edx\n  call strncpy\n  movb $0, 127(%%eax)\n  addl $12, %%esp\n");
+						printf("  movl %%esp, %%ebx\n  subl $4, %%ebx\n  subl $128, %%esp\n  movl %%esp, %%edx\n  pushl $128\n  pushl %%eax\n  leal (%%edx), %%edx\n  pushl %%edx\n  call strncpy\n  movb $0, 127(%%eax)\n  addl $12, %%esp\n");
 						for(i = st; i > 0; --i)
 							printf("  push %d(%%ebx)\n", WORDSIZE*i);
 						printf("  push %%eax\n");
 						
 					}
+					else	printf("  pushl %%eax\n");
 
 					stack_depth = st;
 					++stack_depth;
@@ -1639,7 +1619,7 @@ instr *insert_block(instr *b){
 
 }
 
-/*
+
 
 char *print_type(enum type_ t){
 	switch(t){
@@ -1647,8 +1627,6 @@ char *print_type(enum type_ t){
 		 return "integer";
 		case STRIN:
 		 return "string";
-		case FUNCTION:
-		 return "function";
 		case VOID:
 		 return "void";
 		default:
@@ -1660,14 +1638,13 @@ char *print_type(enum type_ t){
 void print_table(sym_table *t){
 
 
-	int i;
+	int i, j;
 	symbol *s;
-	arg *a;
+	expr *a;
 
-	printf("Symbol table");
-	if(t->func != NULL)
-		printf(" for function %s\n", t->func->id);
-	else if(t->prev == NULL)
+	printf("Symbol table size: %d", t->size);
+
+	if(t->prev == NULL)
 		printf(" GLOBAL\n");
 	else printf("\n");
 
@@ -1680,11 +1657,11 @@ void print_table(sym_table *t){
 		s = t->table[i];
 		while(s != NULL){
 			printf("%s\t\t| %s\t\t| ", s->id, print_type(s->type));
-			if(s->type == FUNCTION){
-				a = s->alist;
-				while(a != NULL){
-					printf("%s ", print_type(a->type));
-					a = a->next;
+			if(s->args != NULL){
+				j = 0;
+				while(s->args[j] != VOID){
+					printf("%s ", print_type(s->args[j]));
+					++j;
 				}
 			}
 			printf("\n");
@@ -1697,27 +1674,4 @@ void print_table(sym_table *t){
 	printf("\n");
 }
 
-void print_sym(char *symb, symbol **table){
 
-	symbol *track = table[hash_sym(symb)];
-	arg *argument;
-
-	while(track != NULL){
-		if(!strcmp(track->id, symb)){
-			printf("Function: %s\n", track->id);
-			printf("Arguments: ");
-			argument = track->alist;
-			while(argument != NULL){
-				printf("%s ",argument->id);
-				argument = argument->next; 
-			}
-			printf("\n");
-			return;
-		}
-		else track = track->next;
-	}
-	return;
-
-
-}
-*/
