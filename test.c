@@ -4,20 +4,21 @@ extern int printd(int s);
 
 int main(){
 
-	int s;
+	int s, u;
 	int t;
 
 	s = 3;
-	t = 2;
+	u = 0;
 
-	if(s < t){
-		printd(s);
-		printd(5);
+	while(u < 19){
+		u = u + 2;
 	}
-	else { printd(t); printd(2);}
+
+	printd(u);
+
+	return 0;
 
 	
-	return 1;
 }
 
 

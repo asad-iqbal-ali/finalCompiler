@@ -1348,7 +1348,60 @@ void print_instructions(instr *block){
 				}
 				printf("  .out%d:\n", fl->key);
 				break;
-		
+			case F: 
+				e = fl->a1;
+				while(e != NULL){
+					print_expr(e, block->function);
+					e = e->next;
+				}
+				printf("  .loop%d:\n", fl->key);			
+				e = fl->con->left;
+				while(e != NULL){
+					print_expr(e, block->function);
+					e = e->next;
+				}
+				e = fl->con->right;
+				while(e != NULL){
+					print_expr(e, block->function);
+					e = e->next;
+				}
+				printf("  popl %%edx\n  popl %%eax\n  cmp %%edx, %%eax\n  %s .skip%d\n", print_cond(fl->con->c, 1), fl->key);
+				e = block->list;
+					while(e != NULL){
+						print_expr(e, block->function);
+						e = e->next;
+				}
+				e = fl->a2;
+				while(e != NULL){
+					print_expr(e, block->function);
+					e = e->next;
+				}
+				printf("  jmp .loop%d\n", fl->key);
+				printf("  .skip%d:\n", fl->key); 
+				break;
+			case W: 
+				
+				printf("  .loop%d:\n", fl->key);			
+				e = fl->con->left;
+				while(e != NULL){
+					print_expr(e, block->function);
+					e = e->next;
+				}
+				e = fl->con->right;
+				while(e != NULL){
+					print_expr(e, block->function);
+					e = e->next;
+				}
+				printf("  popl %%edx\n  popl %%eax\n  cmp %%edx, %%eax\n  %s .skip%d\n", print_cond(fl->con->c, 1), fl->key);
+				e = block->list;
+					while(e != NULL){
+						print_expr(e, block->function);
+						e = e->next;
+				}
+				
+				printf("  jmp .loop%d\n", fl->key);
+				printf("  .skip%d:\n", fl->key); 
+				break;
 	
 
 
