@@ -910,6 +910,7 @@ primary_expression {$$=$1;}
 							return -1;
 						}
 						$$->type = tmp_sym->type;
+						$$->ret_type = $$->type;
 						$$->data = $1;
 						$$->next = NULL;
 						$$->args = $3;
@@ -942,6 +943,7 @@ primary_expression {$$=$1;}
 							return -1;
 						}
 						$$->type = tmp_sym->type;
+						$$->ret_type = $$->type;
 						$$->data = $1;
 						$$->next = NULL;
 						$$->args = NOARG;
@@ -1297,7 +1299,7 @@ void print_instructions(instr *block){
 			if(arg->type == STRIN){
 				++i;
 				find_symbol(arg->id, &t, local_table);
-				printf("  pushl $128\n  pushl %d(%%ebp)\n  leal -%d(%%ebp) %%eax\n  pushl %%eax\n  call strncpy\n  movb  $0, %d(%%eax)\n  addl $12, %%esp\n",4*(totalargs+1),i*WORDSIZE*STLEN, (WORDSIZE*STLEN)-1);		
+				printf("  pushl $128\n  pushl %d(%%ebp)\n  leal -%d(%%ebp), %%eax\n  pushl %%eax\n  call strncpy\n  movb  $0, %d(%%eax)\n  addl $12, %%esp\n",4*(totalargs+1),i*WORDSIZE*STLEN, (WORDSIZE*STLEN)-1);		
 			}
 			arg = arg->next;
 
@@ -1309,17 +1311,8 @@ void print_instructions(instr *block){
 	if(fl != NULL)
 		switch(fl->type){
 			case IE: 
-				e = fl->con->left;
-				while(e != NULL){
-					print_expr(e, block->function);
-					e = e->next;
-				}
-				e = fl->con->right;
-				while(e != NULL){
-					print_expr(e, block->function);
-					e = e->next;
-				}
-				printf("  popl %%edx\n  popl %%eax\n  cmp %%edx, %%eax\n  %s .no%d\n", print_cond(fl->con->c, 1), fl->key);
+				print_cond(fl->con, 1, block->function);
+				printf(".no%d\n", fl->key);
 				e = block->list;
 					while(e != NULL){
 						print_expr(e, block->function);
@@ -1330,17 +1323,8 @@ void print_instructions(instr *block){
 				printf("  .no%d:\n", fl->key); 
 				break;
 			case I: 
-				e = fl->con->left;
-				while(e != NULL){
-					print_expr(e, block->function);
-					e = e->next;
-				}
-				e = fl->con->right;
-				while(e != NULL){
-					print_expr(e, block->function);
-					e = e->next;
-				}
-				printf("  popl %%edx\n  popl %%eax\n  cmp %%edx, %%eax\n  %s .no%d\n", print_cond(fl->con->c, 1), fl->key);
+				print_cond(fl->con, 1, block->function);
+				printf(".no%d\n", fl->key);
 				e = block->list;
 					while(e != NULL){
 						print_expr(e, block->function);
@@ -1362,18 +1346,10 @@ void print_instructions(instr *block){
 					print_expr(e, block->function);
 					e = e->next;
 				}
-				printf("  .loop%d:\n", fl->key);			
-				e = fl->con->left;
-				while(e != NULL){
-					print_expr(e, block->function);
-					e = e->next;
-				}
-				e = fl->con->right;
-				while(e != NULL){
-					print_expr(e, block->function);
-					e = e->next;
-				}
-				printf("  popl %%edx\n  popl %%eax\n  cmp %%edx, %%eax\n  %s .skip%d\n", print_cond(fl->con->c, 1), fl->key);
+				printf("  .loop%d:\n", fl->key);
+			
+				print_cond(fl->con, 1, block->function);
+				printf(".skip%d\n",fl->key);
 				e = block->list;
 					while(e != NULL){
 						print_expr(e, block->function);
@@ -1390,17 +1366,8 @@ void print_instructions(instr *block){
 			case W: 
 				
 				printf("  .loop%d:\n", fl->key);			
-				e = fl->con->left;
-				while(e != NULL){
-					print_expr(e, block->function);
-					e = e->next;
-				}
-				e = fl->con->right;
-				while(e != NULL){
-					print_expr(e, block->function);
-					e = e->next;
-				}
-				printf("  popl %%edx\n  popl %%eax\n  cmp %%edx, %%eax\n  %s .skip%d\n", print_cond(fl->con->c, 1), fl->key);
+				print_cond(fl->con, 1, block->function);
+				printf(".skip%d\n",fl->key);
 				e = block->list;
 					while(e != NULL){
 						print_expr(e, block->function);
@@ -1419,17 +1386,8 @@ void print_instructions(instr *block){
 						print_expr(e, block->function);
 						e = e->next;
 				}
-				e = fl->con->left;
-				while(e != NULL){
-					print_expr(e, block->function);
-					e = e->next;
-				}
-				e = fl->con->right;
-				while(e != NULL){
-					print_expr(e, block->function);
-					e = e->next;
-				}
-				printf("  popl %%edx\n  popl %%eax\n  cmp %%edx, %%eax\n  %s .loop%d\n", print_cond(fl->con->c, 0), fl->key);
+				print_cond(fl->con, 0, block->function);
+				printf(".loop%d\n",fl->key);
 				break;
 	
 
@@ -1524,24 +1482,67 @@ void print_expr(expr *e, char *function){
 }
 
 
-char *print_cond(enum compr c, int opposite){
+char *print_cond(cond *c, int opposite, char *function){
+	
+	expr *e;
+	char *jump;
 
-	switch(c){
-		case INFE:
-		 	return (opposite? "jge":"jl");
-		case EGA:
-			return (opposite? "jne":"je");
-		case SU:
-			return (opposite? "jle":"jg");
-		case INFEQUA:
-			return (opposite? "jg":"jle");
-		case SUPEQUA:
-			return (opposite? "jl":"jge");
-		case DIF:
-			return (opposite? "je":"jne");
+	
+	switch(c->c){
+			case INFE:
+			 	jump = (opposite? "jge":"jl");
+				break;
+			case EGA:
+				jump = (opposite? "jne":"je");
+				break;
+			case SU:
+				jump = (opposite? "jle":"jg");
+				break;
+			case INFEQUA:
+				jump = (opposite? "jg":"jle");
+				break;
+			case SUPEQUA:
+				jump = (opposite? "jl":"jge");
+				break;
+			case DIF:
+				jump = (opposite? "je":"jne");
+				break;
 
 
 	}
+
+	if(c->left->ret_type == INTEG){
+		e = c->left;
+		while(e != NULL){
+			print_expr(e, function);
+			e = e->next;
+		}
+		e = c->right;
+		while(e != NULL){
+			print_expr(e, function);
+			e = e->next;
+		}
+		printf("  popl %%ebx\n  popl %%eax\n");
+		
+		printf("  cmp %%ebx, %%eax\n  %s ", jump);
+	}
+
+	else{
+
+		e = c->right;
+		while(e != NULL){
+			print_expr(e, function);
+			e = e->next;
+		}
+		e = c->left;
+		while(e != NULL){
+			print_expr(e, function);
+			e = e->next;
+		}
+		printf("  call strcmp\n  addl $8, %%esp\n  cmp $0, %%eax\n  %s ", jump );
+
+	}
+	
 
 
 }

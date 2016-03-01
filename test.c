@@ -1,26 +1,24 @@
-extern int printd(int s);
-
-
+extern int printf(string s);
+extern int printd(int d);
+extern int strcmp(string s, string y);
 
 int main(){
 
-	int s, u;
-	int t;
+	string s;
+	string t,b;
 
-	s = 3;
-	u = 0;
+	s = "aaa";
+	b = "aaa";
+	t = "bbb";
 
-	while(u < 19){
-		u = u + 2;
-		if(u > 10){
-			printd(u+s);
-		}
+	if(t > s){
+		if(strcmp(t,s) > 0)
+			printf("correct\n");
+		else printf("wrong\n");
 	}
-
-	printd(u);
+	
 
 	return 0;
-
 	
 }
 

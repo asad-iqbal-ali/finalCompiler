@@ -46,6 +46,8 @@ int	{return INT;}
 string	{return STRING;}
 extern	{return EXTERN;}
 
+\'.\'	{yylval.fn = yytext[1]; return CONST_INT;}
+
 [a-zA-z]+[0-9]*	{yylval.a = strdup(yytext); return IDENT;}
 [0-9]+	{yylval.fn = atoi(yytext); return CONST_INT;}
 \"([^"]*)\" {yylval.a = strdup(yytext); return CONST_STRING;}

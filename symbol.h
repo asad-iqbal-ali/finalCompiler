@@ -122,4 +122,4 @@ void print_table(sym_table *t);
 
 sym_table *create_table(sym_table *loc);
 sym_table *destroy_table(sym_table *loc);
-char *print_cond(enum compr c, int opposite);
+char *print_cond(cond *c, int opposite, char *function);
