@@ -28,6 +28,7 @@ int str_counter = 0;
 
 expr *tmp;
 expr *tmp2;
+expr *elseflag = 0;
 expr *NOARG = 0;
 symbol *NOARGS = 0;
 instr *f_def, *current_block, *last_block, *global_block;
@@ -114,30 +115,9 @@ declaration 	// Declaration Global
 ;
 
 function_definition :  
-type function_declarator compound_instruction {		declar *t = $2;
-							int argcount = 1;
-							enum type_ *argtypes = NULL;
-							tmp_sym = t->args;
-							if(tmp_sym == NOARGS){
-								argtypes = malloc(sizeof(enum type_));
-								*argtypes = VOID;
-							}
-							else{
-								while(tmp_sym != NULL){
-									argcount++;
-									tmp_sym = tmp_sym->next;
-								}
-								argtypes = malloc(sizeof(enum type_)*argcount);
-								argcount = 0;
-								tmp_sym = t->args;
-								while(tmp_sym != NULL){
-									argtypes[argcount] = tmp_sym->type;
-									argcount++;
-									tmp_sym = tmp_sym->next;
-								}
-								argtypes[argcount] = VOID;
-							}
-							tmp_sym = add_symbol(t->id, $1, argtypes, GLOBAL, local_table);
+type function_declarator compound_instruction {		
+						find_symbol($2->id, &tmp_sym, local_table);
+						tmp_sym->type = $1;						
 						
 						print_instructions(f_def);
 						f_def = NULL;
@@ -205,30 +185,11 @@ type declarator_list ';' 	{
 							}
 						}
 						else{
-							tmp_sym = t->args;
-							if(tmp_sym == NOARGS){
-								argtypes = malloc(sizeof(enum type_));
-								*argtypes = VOID;
-							}
-							else{
-								while(tmp_sym != NULL){
-									argcount++;
-									tmp_sym = tmp_sym->next;
-								}
-								argtypes = malloc(sizeof(enum type_)*argcount);
-								argcount = 0;
-								tmp_sym = t->args;
-								while(tmp_sym != NULL){
-									argtypes[argcount] = tmp_sym->type;
-									argcount++;
-									tmp_sym = tmp_sym->next;
-								}
-								argtypes[argcount] = VOID;
-							}
-							tmp_sym = add_symbol(t->id, $1, argtypes, STACK, local_table);
-
-
+							find_symbol(t->id, &tmp_sym, local_table);
+							tmp_sym->type = $1;
+						
 						}
+						
 						t = t->next;
 						
 					}
@@ -309,7 +270,7 @@ IDENT 			{
 ;
 
 function_declarator :  
-IDENT '(' ')' 			{
+IDENT '(' ')' 			{	enum type_ argtype;
 					strcpy(current_function, $1);
 				
 					$$ = malloc(sizeof(declar));
@@ -317,9 +278,15 @@ IDENT '(' ')' 			{
 					$$->set = NULL;
 					$$->args = NOARGS;
 					$$->next = NULL;
+					
+		
+					argtype = VOID;
+						
+					tmp_sym = add_symbol($1, VOID, &argtype, GLOBAL, global_table);
 	
 				}	// Create function name
-| IDENT '(' parameter_list ')'  {
+| IDENT '(' parameter_list ')'  {	int argcount = 1;
+					enum type_ *argtypes;
 					strcpy(current_function, $1);
 					current_args = $3;
 
@@ -330,6 +297,24 @@ IDENT '(' ')' 			{
 					$$->set = NULL;
 					$$->args = $3;
 					$$->next = NULL;
+
+					tmp_sym = $3;
+							
+					while(tmp_sym != NULL){
+						argcount++;
+						tmp_sym = tmp_sym->next;
+					}
+					argtypes = malloc(sizeof(enum type_)*argcount);
+					argcount = 0;
+					tmp_sym = $3;
+					while(tmp_sym != NULL){
+						argtypes[argcount] = tmp_sym->type;
+						argcount++;
+						tmp_sym = tmp_sym->next;
+					}
+					argtypes[argcount] = VOID;
+						
+					tmp_sym = add_symbol($1, VOID, argtypes, GLOBAL, global_table);
 
 	
 				}	// Create partial function 
@@ -571,7 +556,7 @@ cond_instruction instruction {
 				$$ = $2->prev;
 				}
 | cond_instruction instruction ELSE instruction {
-				$1->a1 = 0;
+				$1->type = IE;
 				$2->f = $1;
 				$$ = $2->prev;
 				flow *t = malloc(sizeof(flow));
@@ -806,10 +791,7 @@ expression_multiplicative {$$=$1;}
 expression_multiplicative :  
 unary_expression{$$=$1;}
 | expression_multiplicative MULTI unary_expression {
-								if($1->ret_type != INTEG || $3->ret_type != INTEG){
-								 	yyerror("multiplication requires two integer values");
-									return -1;
-								}
+								
 								tmp = $3;
 			 					tmp2 = tmp->next;
 								while(tmp2 != NULL){
@@ -1318,6 +1300,27 @@ void print_instructions(instr *block){
 	fl = block->f;
 	if(fl != NULL)
 		switch(fl->type){
+			case IE: 
+				e = fl->con->left;
+				while(e != NULL){
+					print_expr(e, block->function);
+					e = e->next;
+				}
+				e = fl->con->right;
+				while(e != NULL){
+					print_expr(e, block->function);
+					e = e->next;
+				}
+				printf("  popl %%edx\n  popl %%eax\n  cmp %%edx, %%eax\n  %s .no%d\n", print_cond(fl->con->c, 1), fl->key);
+				e = block->list;
+					while(e != NULL){
+						print_expr(e, block->function);
+						e = e->next;
+				}
+				
+				printf("  jmp .out%d\n", fl->key);
+				printf("  .no%d:\n", fl->key); 
+				break;
 			case I: 
 				e = fl->con->left;
 				while(e != NULL){
@@ -1335,8 +1338,6 @@ void print_instructions(instr *block){
 						print_expr(e, block->function);
 						e = e->next;
 				}
-				if(fl->a1 == 0)
-					printf("  jmp .out%d\n", fl->key);
 				printf("  .no%d:\n", fl->key); 
 				break;
 			case E: 

@@ -41,6 +41,7 @@ enum compr{
 
 enum ftype{
 	I,
+	IE,
 	E,
 	D,
 	F,
