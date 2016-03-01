@@ -1,0 +1,56 @@
+# 1 "test/string3.c"
+# 1 "<built-in>"
+# 1 "<command-line>"
+# 1 "/usr/include/stdc-predef.h" 1 3 4
+# 1 "<command-line>" 2
+# 1 "test/string3.c"
+# 40 "test/string3.c"
+# 1 "test/../lib/lib.h" 1
+
+
+
+
+
+extern int printf( string s );
+
+
+extern int printd( int a );
+
+
+extern int get_char_at( string s, int i );
+
+
+extern int put_char_at( string s, int i, int c );
+
+
+extern int strlen( string s );
+# 41 "test/string3.c" 2
+
+string sub( string s, int i, int j ) {
+  int k;
+  string r;
+
+  printf(s + "\n");
+  r = "";
+  for ( k = i; k <= j; k = k+1 )
+    r = r + get_char_at( s, k );
+  
+  printf(r + "\n");
+  return r;
+
+  
+}
+
+string invert( string s ) {
+  if ( s == "" )
+    return "";
+  return invert(sub(s,1,strlen(s)-1)) + get_char_at(s,0);
+}
+
+int main() {
+  string s;
+  string t;
+  s = "hello";
+  t = sub(s,1,4);
+  printf(t + "\n");
+}

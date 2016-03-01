@@ -1,29 +1,40 @@
-# 1 "test/string.c"
+# 1 "test.c"
 # 1 "<built-in>"
 # 1 "<command-line>"
-# 1 "test/string.c"
-# 31 "test/string.c"
-extern int printf( string s );
+# 1 "/usr/include/stdc-predef.h" 1 3 4
+# 1 "<command-line>" 2
+# 1 "test.c"
+extern int printf(string s);
+extern int printd(int d);
+extern int strcmp(string s, string y);
+
+extern int put_char_at( string s, int i, int c );
+
+extern int get_char_at( string s, int i );
+
+string str(string s){
+ return s + "\n";
+}
+
+string str2(string s, string x){
+ return s + x;
+
+}
+
+string s;
+
+int main(){
+
+ string t;
+ int i;
+
+ s = "SPACE";
 
 
+ t = "abcd";
 
+ printf(str2(s, "\n"));
+ printf(t + str(str2(s, "efg")));
 
-int main() {
-  string s;
-  string t;
-string u;
-
-  s = "hello";
-  t = " world\n";
-  u = "bye";
-  printf("hello");
-  printf("hello"+"world\n");
-  printf(s+"world\n");
-  printf("hello"+t);
-  printf(s+t);
-  printf((s+u)+t);
-  printf(s+(u+t));
-  printf((s+s)+(t+t));
-  printf(s+u+t);
-  return 0;
+ return 0;
 }

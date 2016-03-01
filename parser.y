@@ -25,6 +25,7 @@ sym_table *global_table;
 sym_table *local_table;
 char* glb_strings[MAXSTRNGS];
 int str_counter = 0;
+int stack_depth = 0;
 
 expr *tmp;
 expr *tmp2;
@@ -34,6 +35,8 @@ symbol *NOARGS = 0;
 instr *f_def, *current_block, *last_block, *global_block;
 
 char current_function[MAXIDLEN];
+
+enum type_ current_type;
 
 int flow_key = 0;
 
@@ -215,8 +218,8 @@ type declarator_list ';' 	{
 ;
 
 type :  
-INT	{$$ = INTEG;} 					// set INT
-| STRING 	{$$ = STRIN;}		// set String
+INT	{$$ = INTEG; current_type = INTEG;} 					// set INT
+| STRING 	{$$ = STRIN; current_type = STRIN;}		// set String
 ;
 
 declarator_list :  
@@ -282,7 +285,7 @@ IDENT '(' ')' 			{	enum type_ argtype;
 		
 					argtype = VOID;
 						
-					tmp_sym = add_symbol($1, VOID, &argtype, GLOBAL, global_table);
+					tmp_sym = add_symbol($1, current_type, &argtype, GLOBAL, global_table);
 	
 				}	// Create function name
 | IDENT '(' parameter_list ')'  {	int argcount = 1;
@@ -314,7 +317,7 @@ IDENT '(' ')' 			{	enum type_ argtype;
 					}
 					argtypes[argcount] = VOID;
 						
-					tmp_sym = add_symbol($1, VOID, argtypes, GLOBAL, global_table);
+					tmp_sym = add_symbol($1, current_type, argtypes, GLOBAL, global_table);
 
 	
 				}	// Create partial function 
@@ -553,12 +556,13 @@ instruction  {$$=$1;}
 select_instruction :  
 cond_instruction instruction {
 				$2->f = $1;
-				$$ = $2->prev;
+				$$ = insert_block($2);
 				}
 | cond_instruction instruction ELSE instruction {
 				$1->type = IE;
 				$2->f = $1;
-				$$ = $2->prev;
+				$$ = insert_block($2);
+
 				flow *t = malloc(sizeof(flow));
 				t->key = $1->key;			
 				t->type = E;
@@ -566,6 +570,21 @@ cond_instruction instruction {
 				t->a1 = NULL;
 				t->a2 = NULL;
 				$4->f = t;
+
+
+				$$->list->next = malloc(sizeof(expr));
+				$$->list->next->type = BLOCK_JUMP;
+				$$->list->next->block = $4;
+				$$->list->next->next = NULL;
+				
+				tmp = $4->prev->list;
+				while(tmp->next != $4->prev_ins)
+					tmp = tmp->next;
+				tmp->next = tmp->next->next;
+				free($4->prev_ins);
+
+				$4->prev = $$;
+				$4->prev_ins = $$->list->next;
 				}
 
 ;
@@ -592,7 +611,12 @@ WHILE '(' condition ')' instruction {
 					t->a1 = NULL;
 					t->a2 = NULL;
 					$5->f = t;
-					$$ = $5->prev;
+
+					$$ = insert_block($5);					
+					
+					
+					
+					
 
 					}// Handle while loop
 | DO instruction WHILE '(' condition ')'  {flow *t = malloc(sizeof(flow));
@@ -603,7 +627,7 @@ WHILE '(' condition ')' instruction {
 					t->a1 = NULL;
 					t->a2 = NULL;
 					$2->f = t;
-					$$ = $2->prev;}
+					$$ = insert_block($2);}
 | FOR '(' assignment_expression ';' condition ';' assignment_expression ')' instruction  {
 
 					flow *t = malloc(sizeof(flow));
@@ -614,7 +638,7 @@ WHILE '(' condition ')' instruction {
 					t->a1 = $3;
 					t->a2 = $7;
 					$9->f = t;
-					$$ = $9->prev;} 
+					$$ = insert_block($9);} 
 ;
 
 jump_instruction:  
@@ -650,7 +674,12 @@ RETURN expression ';' {
 			tmp2->next->type = RET;
 			if($2 != NULL){
 				tmp2->next->data = malloc(sizeof(char)*MAXEXPR);
-				snprintf(tmp2->next->data, MAXEXPR, "  popl %%eax\n");
+				if(tmp2->ret_type == STRIN){
+					snprintf(tmp2->next->data, MAXEXPR, "  popl %%edx\n  pushl $%d\n  pushl %%edx\n  pushl $.strres\n  call strncpy\n  movb $0, %d(%%eax)\n  addl $12, %%esp\n", (WORDSIZE*STLEN), (WORDSIZE*STLEN)-1); 
+
+				}
+	
+				else snprintf(tmp2->next->data, MAXEXPR, "  popl %%eax\n");
 			}
 			else{
 				tmp2->next->data = malloc(sizeof(char));
@@ -798,7 +827,10 @@ expression_multiplicative {$$=$1;}
 
 expression_multiplicative :  
 unary_expression{$$=$1;}
-| expression_multiplicative MULTI unary_expression {
+| expression_multiplicative MULTI unary_expression {		if($1->ret_type != INTEG || $3->ret_type != INTEG){
+								 	yyerror("mulitplication requires two integer values");
+									return -1;
+								}
 								
 								tmp = $3;
 			 					tmp2 = tmp->next;
@@ -841,7 +873,7 @@ unary_expression{$$=$1;}
 							}
 | expression_multiplicative MODULO unary_expression	{
 								if($1->ret_type != INTEG || $3->ret_type != INTEG){
-								 	yyerror("modulo requires two integer values");
+								 	yyerror("modulus requires two integer values");
 									return -1;
 								}
 								tmp = $3;
@@ -1417,32 +1449,50 @@ void print_expr(expr *e, char *function){
 	int i;
 	switch(e->type){
 			case LSHIFT:
+				--stack_depth;
 				printf("  popl %%eax\n  popl %%ecx\n  sall %%cl, %%eax\n  pushl %%eax\n");
 				break;
 			case RSHIFT:
+				--stack_depth;	
 				printf("  popl %%eax\n  popl %%ecx\n  sarl %%cl, %%eax\n  pushl %%eax\n");
 				break;
 			case DIVI:
+				--stack_depth;
 				printf("  movl $0, %%edx\n  popl %%eax\n  popl %%ecx\n  cltd\n  idivl %%ecx\n  pushl %%eax\n");
 				break;
 			case MOD:
+				--stack_depth;
 				printf("  movl $0, %%edx\n  popl %%eax\n  popl %%ecx\n  cltd\n  idivl %%ecx\n  pushl %%edx\n");
 				break;
 			case ADDII:
+				--stack_depth;
 				printf("  popl %%eax\n  popl %%ecx\n  addl %%ecx, %%eax\n  pushl %%eax\n");
 				break;
 			case ADDSS:
-				printf("  popl %%eax\n  popl %%ebx\n  pushl $%d\n  pushl %%eax\n  pushl $.stracc\n  call strncpy\n  movb $0, %d(%%eax)\n  addl $12, %%esp\n  pushl %%ebx\n  pushl $.stracc\n  call strcat\n  movb $0, %d(%%eax)\n  addl $8, %%esp\n  pushl $%d\n  pushl $.stracc\n  pushl $.strres\n  call strncpy\n  movb $0, %d(%%eax)\n  addl $12, %%esp\n  push $.strres\n", WORDSIZE*STLEN, (WORDSIZE*STLEN)-1, (WORDSIZE*STLEN)-1, (WORDSIZE*STLEN), (WORDSIZE*STLEN)-1);
+				--stack_depth;
+				printf("  popl %%eax\n  movl %%esp, %%ebx\n  pushl $%d\n  pushl %%eax\n  pushl $.stracc\n  call strncpy\n  movb $0, %d(%%eax)\n  addl $12, %%esp\n  pushl (%%ebx)\n  pushl $.stracc\n  call strcat\n  movb $0, %d(%%eax)\n  addl $8, %%esp\n  subl $128, %%esp\n  movl %%esp, %%eax\n  pushl $%d\n  pushl $.stracc\n  leal (%%eax), %%eax\n  push %%eax\n  call strncpy\n  movb $0, %d(%%eax)\n  addl $12, %%esp\n", WORDSIZE*STLEN, (WORDSIZE*STLEN)-1, (WORDSIZE*STLEN)-1, (WORDSIZE*STLEN), (WORDSIZE*STLEN)-1);
+				for(i = stack_depth-1; i > 0; --i)
+					printf("  push %d(%%ebx)\n", WORDSIZE*i);
+				printf("  push %%eax\n");
 				break;
 			case ADDIS:
-				printf("  popl %%eax\n  popl %%ebx\n  andw $0xff, %%ax\n  movw %%ax, .stracc\n  pushl %%ebx\n  pushl $.stracc\n  call strcat\n  movb $0, %d(%%eax)\n  addl $8, %%esp\n  pushl $%d\n  pushl $.stracc\n  pushl $.strres\n  call strncpy\n  movb $0, %d(%%eax)\n  addl $12, %%esp\n  push $.strres\n", (WORDSIZE*STLEN)-1, (WORDSIZE*STLEN), (WORDSIZE*STLEN)-1);
+				printf("  popl %%eax\n  movl %%esp, %%ebx\n  andw $0xff, %%ax\n  movw %%ax, .stracc\n  pushl (%%ebx)\n  pushl $.stracc\n  call strcat\n  movb $0, %d(%%eax)\n  addl $8, %%esp\n  subl $128, %%esp\n  movl %%esp, %%eax\n  pushl $%d\n  pushl $.stracc\n  leal (%%eax), %%eax\n  push %%eax\n  call strncpy\n  movb $0, %d(%%eax)\n  addl $12, %%esp\n", (WORDSIZE*STLEN)-1, (WORDSIZE*STLEN), (WORDSIZE*STLEN)-1);
+				for(i = stack_depth-1; i > 0; --i)
+					printf("  push %d(%%ebx)\n", WORDSIZE*i);
+				printf("  push %%eax\n");
 				break;
 			case ADDSI:
-				printf("  popl %%ebx\n  popl %%eax\n  andw $0xff, %%ax\n  movw %%ax, .stracc\n  sub $%d, %%esp\n  movl %%esp, %%ecx\n  pushl $.stracc\n  pushl %%ecx\n  call strcpy\n  addl $8, %%esp\n  pushl $%d\n  pushl  %%ebx\n  pushl $.stracc\n  call strncpy\n  movb $0, %d(%%eax)\n  addl $12, %%esp\n  pushl %%esp\n  pushl $.stracc\n  call strcat\n  movb $0, %d(%%eax)\n  addl $%d, %%esp\n  pushl $%d\n  pushl $.stracc\n  pushl $.strres\n  call strncpy\n  movb $0, %d(%%eax)\n  addl $12, %%esp\n  push $.strres\n", WORDSIZE*STLEN, WORDSIZE*STLEN, (WORDSIZE*STLEN)-1,(WORDSIZE*STLEN)-1, 8+(WORDSIZE*STLEN), (WORDSIZE*STLEN), (WORDSIZE*STLEN)-1 );
+				printf("  popl %%edi\n  popl %%eax\n  movl %%esp, %%ebx\n  subl $4, %%ebx\n  andw $0xff, %%ax\n  movw %%ax, .stracc\n  sub $%d, %%esp\n  movl %%esp, %%ecx\n  pushl $.stracc\n  pushl %%ecx\n  call strcpy\n  addl $8, %%esp\n  pushl $%d\n  pushl  %%edi\n  pushl $.stracc\n  call strncpy\n  movb $0, %d(%%eax)\n  addl $12, %%esp\n  pushl %%esp\n  pushl $.stracc\n  call strcat\n  movb $0, %d(%%eax)\n  addl $%d, %%esp\n  subl $128, %%esp\n  movl %%esp, %%eax\n  pushl $%d\n  pushl $.stracc\n  leal (%%eax), %%eax\n  push %%eax\n  call strncpy\n  movb $0, %d(%%eax)\n  addl $12, %%esp\n", WORDSIZE*STLEN, WORDSIZE*STLEN, (WORDSIZE*STLEN)-1,(WORDSIZE*STLEN)-1, 8+(WORDSIZE*STLEN), (WORDSIZE*STLEN), (WORDSIZE*STLEN)-1 );
+				for(i = stack_depth-1; i > 0; --i)
+					printf("  push %d(%%ebx)\n", WORDSIZE*i);
+				printf("  push %%eax\n");
+				break;
 			case SUB:
+				--stack_depth;
 				printf("  popl %%eax\n  popl %%ecx\n  subl %%ecx, %%eax\n  pushl %%eax\n");
 				break;
 			case MULT:
+				--stack_depth;
 				printf("  popl %%eax\n  popl %%ecx\n  imull %%ecx, %%eax\n  pushl %%eax\n");
 				break;
 			case RET:
@@ -1451,16 +1501,21 @@ void print_expr(expr *e, char *function){
 				break;
 
 			case BLOCK_JUMP:
+				stack_depth = 0;
 				print_instructions(e->block);
 				break;
 
 
 			default :
-				if(e->args == NULL)
+				if(e->args == NULL){
 					printf("%s", e->data);
+					if(e->type == SET)
+						--stack_depth;
+					else ++stack_depth;
+				}
 				else{
 					argcounter = 0;
-					
+					int st = stack_depth;
 					track = e->args;
 					if(track != NOARG){
 						while(track != NULL){
@@ -1473,7 +1528,20 @@ void print_expr(expr *e, char *function){
 					}
 					printf("  call %s\n", e->data);
 					printf("  addl $%d, %%esp\n", argcounter*WORDSIZE);
-					printf("  pushl %%eax\n");
+
+					if(e->ret_type != STRIN)
+						printf("  pushl %%eax\n");
+					else{
+						
+						printf("  movl %%esp, %%ebx\n  subl $4, %%ebx\n  subl $128, %%esp\n  movl %%esp, %%edx\n  pushl $128\n  pushl %%eax\n  pushl %%edx\n  call strncpy\n  movb $0, 127(%%eax)\n  addl $12, %%esp\n");
+						for(i = st; i > 0; --i)
+							printf("  push %d(%%ebx)\n", WORDSIZE*i);
+						printf("  push %%eax\n");
+						
+					}
+
+					stack_depth = st;
+					++stack_depth;
 						
 				}
 				break;
@@ -1544,6 +1612,30 @@ char *print_cond(cond *c, int opposite, char *function){
 	}
 	
 
+
+}
+
+
+instr *insert_block(instr *b){
+					instr *newblock = malloc(sizeof(instr));
+					newblock->f = NULL;
+					newblock->function = NULL;
+					newblock->args = NULL;
+					newblock->stack_size = b->stack_size;
+					newblock->prev = b->prev;
+					newblock->prev_ins = b->prev_ins;
+
+					newblock->list = malloc(sizeof(expr));
+					newblock->list->type = BLOCK_JUMP;
+					newblock->list->next = NULL;
+					newblock->list->block = b;
+					
+					newblock->prev_ins->block = newblock;
+				
+					b->prev = newblock;
+					b->prev_ins = newblock->list;	
+
+					return newblock;
 
 }
 
