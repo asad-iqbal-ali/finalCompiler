@@ -595,7 +595,15 @@ WHILE '(' condition ')' instruction {
 					$$ = $5->prev;
 
 					}// Handle while loop
-| DO instruction WHILE '(' condition ')'  {printf("do/while loop\n");}
+| DO instruction WHILE '(' condition ')'  {flow *t = malloc(sizeof(flow));
+					t->key = flow_key;
+					++flow_key;
+					t->type = D;
+					t->con = $5;
+					t->a1 = NULL;
+					t->a2 = NULL;
+					$2->f = t;
+					$$ = $2->prev;}
 | FOR '(' assignment_expression ';' condition ';' assignment_expression ')' instruction  {
 
 					flow *t = malloc(sizeof(flow));
@@ -1401,6 +1409,27 @@ void print_instructions(instr *block){
 				
 				printf("  jmp .loop%d\n", fl->key);
 				printf("  .skip%d:\n", fl->key); 
+				break;
+			case D: 
+				
+				printf("  .loop%d:\n", fl->key);			
+				
+				e = block->list;
+					while(e != NULL){
+						print_expr(e, block->function);
+						e = e->next;
+				}
+				e = fl->con->left;
+				while(e != NULL){
+					print_expr(e, block->function);
+					e = e->next;
+				}
+				e = fl->con->right;
+				while(e != NULL){
+					print_expr(e, block->function);
+					e = e->next;
+				}
+				printf("  popl %%edx\n  popl %%eax\n  cmp %%edx, %%eax\n  %s .loop%d\n", print_cond(fl->con->c, 0), fl->key);
 				break;
 	
 

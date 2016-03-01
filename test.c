@@ -12,6 +12,9 @@ int main(){
 
 	while(u < 19){
 		u = u + 2;
+		if(u > 10){
+			printd(u+s);
+		}
 	}
 
 	printd(u);
