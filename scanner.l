@@ -6,13 +6,17 @@
 #include "y.tab.h"
 %}
  
-%start STR COMMENT
+%x C_COMMENT L_COMMENT
 %option yylineno
 %%
 
-"/*"	{BEGIN COMMENT;}
-<COMMENT>"*/"	{BEGIN 0;}
-<COMMENT>.	{}
+"/*"	{BEGIN(C_COMMENT);}
+<C_COMMENT>"*/"	{BEGIN(0);}
+<C_COMMENT>.	{}
+
+"//"	{BEGIN(L_COMMENT);}
+<L_COMMENT>[\n]	{BEGIN(0);}
+<L_COMMENT>.	{}
 
 #.*	{}
 
@@ -55,3 +59,7 @@ extern	{return EXTERN;}
 ['(){};,.]	{return *yytext;}
 
 %%
+
+
+
+

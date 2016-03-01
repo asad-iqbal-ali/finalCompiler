@@ -1,16 +1,28 @@
 Asad Ali
-Compilers Project 2
+Compilers Final Project
 
 files:
 	scanner.l: the lex file / scanner
 	parser.y: the yacc file / parser
-	test and test2:	the test input programs provided in class
+	symbo.h: headers for lex/yacc
+	makefile:
+	lib / lib.o : the library provided from class
+	test: the provided tests
+	tscript: a bash script that will compile the tests in the test folder using gcc and cstr, and compare the output from running both
+	
 use:
-	"make" creates the executable "project2"
-	$./project2 < (input)
+	"make" creates the executable "cstr"
+	$./cstr < (input)
+	spits out assembly to standard out
 
-output:
+Structure:
 
-	The parser will spit out a description of each expression, and print tables as they are destroyed, including what function the table may have been for.
+	This compiler does not support floats. It does support addition of strings, ints, and chars. 
+
+	The compiler splits instructions into "expression" structs, which represent idents or operators. Each struct contains the type of the expression (including var types and operator types) and a return type for idents. For idents, they also include a string consisting of the assembly code necessary to retrieve the ident and push it onto the stack, based on the ident's location in the symbol table. These expressions are strung together into linked lists, which are executed in a row, with operators last. When multiple expressions are chained together, the return type of the first one indicates what type the full expression will return as.
+	Lists of expression structs are, in turn, associated wtih instruction blocks. These consist of either actual bracketed blocks, assignment expressions, or return calls. Thus, blocks can be nested within one another. When a block's expression list is being executed, if it hits an expression of type "BLOCK_JUMP", it will recursively execute the next block's expression list before returning to finish its own.
+	A block may also have a "flow" struct associated with it. These represent control flow statements, which dictate labels, comparison commands, and jump commands before and after the block is printed.
+
+	Strings are passed by value, and strings returned from functions are copied directly to the stack. For this reason, the compiler also tracks the number of items pushed onto the stack. It uses this information to restore the stack by basically recreating it with push calls after the string is copied.
 
 	

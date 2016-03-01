@@ -21,25 +21,55 @@ void yyerror(const char *str){
 
 }
 
+//global symbol table
 sym_table *global_table;
+
+//the table we are currently processing from
 sym_table *local_table;
+
+//an array of strings literals read from the program, and a counter.
+//These are printed as labels at the end of output.
 char* glb_strings[MAXSTRNGS];
 int str_counter = 0;
+
+//A tracker for how many items are pushed on to the stack when processing
+//expression structs (see README).
 int stack_depth = 0;
 
+//Some temporary pointers used in various calls below.
 expr *tmp;
 expr *tmp2;
-expr *elseflag = 0;
+
+//Symbols indicating that there are no arguments to an expression or a symbol.
+//These are used to indicate a function with no arguments, while NULL is used
+//to indicate a variable or literal.
 expr *NOARG = 0;
 symbol *NOARGS = 0;
+
+//The major function instruction block, the current block being added to, and the
+//block we just left. The major function block represents all the instructions for
+//a function. Once it is complete, the instructions for it and its nested blocks
+//get printed.
 instr *f_def, *current_block, *last_block;
 
+//A tracker for the last function read. Used so that we can add a function and 
+//its arguments to the symbol table at the start of a block.
 char current_function[MAXIDLEN];
 
-enum type_ current_type;
+//Used to track the last type read, so we know what type our function is.
+//This was very tricky - recursive calls require that we have the function
+//in our symbol table with the proper type before it's actually processed
+//by the parser. Thus, this tracks the last type read, and the one before that.
+//When a type is read, it updates both. If it then turns out to be just part of a parameter list,
+//it is reset to the last type. Once the function ident is processed, it's added
+//to the symbol table with the current type.
+enum type_ current_type, last_type;
 
+//Tracks the control flow flags for jump statements.
 int flow_key = 0;
 
+//More temporary pointers. current_args tracks the list of arguments just read
+//So that they can be added to the symbol table for a function definition.
 symbol *tmp_sym, *tmp_sym2, *current_args;
 
 %}
@@ -104,8 +134,8 @@ external_declaration
 ;
 
 external_declaration :  
-declaration 	// Declaration Global			
-| EXTERN declaration {
+declaration 				
+| EXTERN declaration { //Just change the scope of the function.
 			declar *t = $2;
 			int i;
 			while(t != NULL){
@@ -113,38 +143,45 @@ declaration 	// Declaration Global
 				tmp_sym->scope = EXT;
 				t = t->next;
 			}
-			}// Set Extern attribute			
+			}			
 | function_definition 
 ;
 
 function_definition :  
 type function_declarator compound_instruction {								
+						//execute the instruction block for the function.
 						
-						int i = find_symbol($2->id, &tmp_sym, local_table);
-						tmp_sym->type = $1;
 						print_instructions(f_def);
 						
+						//Reset global pointers
 						f_def = NULL;
 						current_block = NULL;
 						current_args = NULL;
 
 
-						}// generate code function
+						}
   
 ;
 
 
 declaration :  
-type declarator_list ';' 	{
+type declarator_list ';' 	{	
 					declar *t = $2;
 					int argcount = 1;
 					enum type_ *argtypes = NULL;
+
+					//track the list of "set" instructions we may have to build here.
 					expr *last_instruction = NULL;
 					expr *first_instruction = NULL;
 
+					//walk through the list of declarators and add each to the symbol table
 					while(t != NULL){
+						//case for non-function idents
 						if(t->args == NULL){
 							tmp_sym = add_symbol(t->id, $1, NULL, STACK, local_table);
+
+							//If the declar includes a "set" element, it also has to be set to a value.
+							//Thus, add a "SET" expr to the current instruction block's expr list.
 							if(t->set != NULL){
 								if(last_instruction == NULL){
 									last_instruction = t->set;
@@ -197,7 +234,7 @@ type declarator_list ';' 	{
 						t = t->next;
 						
 					}
-
+					//add the list of set instructions to the current block
 					if(first_instruction != NULL){
 
 						last_instruction->next = NULL;		
@@ -219,8 +256,8 @@ type declarator_list ';' 	{
 ;
 
 type :  
-INT	{$$ = INTEG; current_type = $$;} 					// set INT
-| STRING 	{$$ = STRIN; current_type = $$;}		// set String
+INT	{$$ = INTEG; last_type = current_type; current_type = $$;} 					
+| STRING 	{$$ = STRIN; last_type = current_type; current_type = $$;}		
 ;
 
 declarator_list :  
@@ -240,6 +277,8 @@ declaration 		{$$ = $1;}		// Set locals
 			
 				}	// Set locals
 ;
+
+//A declar contains the ID read, any assignment necessary, and arguments. They are linked together and then processed as a list.
 
 declarator :  
 IDENT 			{
@@ -347,6 +386,7 @@ type IDENT 			{
 					$$->type = $1;
 					strcpy($$->id, $2);
 					$$->next = NULL;
+					current_type = last_type;
 				}
 						// Type declaration
 ;
@@ -362,6 +402,9 @@ instruction :
 
 expression_instruction :              
 expression ';'  {
+			//create a new block, which will encapsulate this expression.
+			//Start by finding the end of the current block's expression list
+			//And adding a "BLOCK_JUMP" expression.
 			tmp = current_block->list;
 			if(tmp != NULL){			
 				while(tmp->next != NULL){
@@ -383,7 +426,7 @@ expression ';'  {
 			current_block = tmp->block;
 			current_block->prev_ins = tmp;
 
-
+			//Set the new block's list to this expression list.
 			current_block->list = $1;
 			current_block->stack_size = local_table->size;
 			last_block = current_block;
@@ -392,7 +435,7 @@ expression ';'  {
 			$$ = last_block;
 		}
 | assignment_expression ';' {
-
+				//same as above
 				tmp = current_block->list;
 				if(tmp != NULL){			
 					while(tmp->next != NULL){
@@ -426,6 +469,7 @@ expression ';'  {
 
 assignment_expression :  
 IDENT assignment expression 	{ 
+					//Check types
 					int i = find_symbol($1, &tmp_sym, local_table);
 					if(tmp_sym == NULL){
 						yyerror("symbol not found 4");
@@ -439,6 +483,9 @@ IDENT assignment expression 	{
 						yyerror("assigning value to function");
 						return -1;
 					}
+
+					//Create a "SET" expression and add it to the end of the current
+					//block's expression list.
 					tmp = $3;
 					while(tmp != NULL){
 						tmp2 = tmp;
@@ -450,6 +497,8 @@ IDENT assignment expression 	{
 		
 					tmp2->data = malloc(sizeof(char)*MAXEXPR);
 					
+					//The "SET" expression's 'data' is the set of instructions to pop
+					//from the stack into the IDENT's location.
 					if(tmp_sym->scope == GLOBAL){
 						if(tmp_sym->type == INTEG)
 							snprintf(tmp2->data, MAXEXPR, "  popl %s\n", $1);
@@ -479,7 +528,8 @@ block_start declaration_list instruction_list block_end {
 
 block_start :  
 '{'	{
-
+		//creat a table, and initialize a new block.
+		//if this is starting a function, initialize f_def
 		local_table = create_table(local_table);
 		if(f_def == NULL){
 			f_def = malloc(sizeof(instr));
@@ -525,11 +575,12 @@ block_start :
 
 
 
-	}// Init your hash table - symbol table
+	}
 ;
 
 block_end :  
 '}' 	{
+		//destroy the table, and jump back to the previous block.
 		if(local_table == global_table){
 			yyerror("No block to close");
 			return -1;
@@ -542,7 +593,7 @@ block_end :
 
 
 	 
-	}// Empty hash table
+	}
 ;
 
 instruction_list :  
@@ -552,6 +603,10 @@ instruction  {$$=$1;}
 				}
 ;
 
+
+//Conditionals essentially involve taking the instruction block handed to them,
+//Setting the block's "f" element to themselves, wrapping the block in a new
+//block, and passing that new block up the chain.
 select_instruction :  
 cond_instruction instruction {
 				$2->f = $1;
@@ -560,6 +615,9 @@ cond_instruction instruction {
 | cond_instruction instruction ELSE instruction {
 				$1->type = IE;
 				$2->f = $1;
+				//This function wraps the instruction block in a new block.
+				//This is done by doing some unlinking/linking (see function
+				//below).
 				$$ = insert_block($2);
 
 				flow *t = malloc(sizeof(flow));
@@ -570,12 +628,14 @@ cond_instruction instruction {
 				t->a2 = NULL;
 				$4->f = t;
 
-
+				//We have to ensure that the "else" statement's instruction block is also
+				//included in the wrapping block, immediately after the if's statements.
 				$$->list->next = malloc(sizeof(expr));
 				$$->list->next->type = BLOCK_JUMP;
 				$$->list->next->block = $4;
 				$$->list->next->next = NULL;
 				
+				//unlink the jump to the "else" statement's instructions from its previous block.
 				tmp = $4->prev->list;
 				while(tmp->next != $4->prev_ins)
 					tmp = tmp->next;
@@ -642,6 +702,9 @@ WHILE '(' condition ')' instruction {
 
 jump_instruction:  
 RETURN expression ';' {
+
+			//As with other expressions ending in ';', create a block to wrap the 
+			//expression list, and then link it to the current block being processed.
 			tmp = current_block->list;
 			if(tmp != NULL){			
 				while(tmp->next != NULL){
@@ -663,6 +726,8 @@ RETURN expression ';' {
 			current_block = tmp->block;
 			current_block->prev_ins = tmp;
 			
+			//Add a "RETURN" block, which pops the output to eax.
+			//if it is a string, the output is copied to .strres
 
 			tmp = $2;
 			while(tmp != NULL){
@@ -717,6 +782,8 @@ EGAL  {$$=EGA;}
 | SUPEQUAL {$$=SUPEQUA;} 
 ;
 
+//These expressions all create an operator expression, join the two 
+//lists of expressions for the operands, and add the operator block at the end.
 expression :  
 expression_additive {$$=$1;}
 | expression SHIFTLEFT expression_additive {
@@ -895,6 +962,7 @@ unary_expression{$$=$1;}
 								
 ;
 
+//Subtract the value from 0.
 unary_expression:  
 expression_postfixee {$$=$1;}
 | MINUS unary_expression {
@@ -926,6 +994,7 @@ expression_postfixee {$$=$1;}
 				}
 ;
 
+//create a function expression, which includes a list of argument expressions.
 expression_postfixee :  
 primary_expression {$$=$1;}
 | IDENT '(' argument_expression_list')' {
@@ -970,6 +1039,7 @@ primary_expression {$$=$1;}
 					}//same as above
 ;
 
+
 argument_expression_list:  
 expression {$$ = $1;}
 | argument_expression_list ',' expression {tmp = $3;
@@ -979,6 +1049,7 @@ expression {$$ = $1;}
 			$$ = $3;}
 ;
 
+//Create an expression struct, containing all the info from the README.
 primary_expression :  
 IDENT  {
 
@@ -1038,8 +1109,9 @@ IDENT  {
 
 %%
 
-int main(void) {
+int main(int argc, char **argv) {
 
+	
 	int i;
 	global_table = malloc(sizeof(sym_table));
 	global_table->table = malloc(sizeof(symbol *)*TABLESIZE);
@@ -1053,16 +1125,12 @@ int main(void) {
 	f_def = NULL;
 	current_block = NULL;
 
-
-
-
 	local_table = global_table;
-	
 	
 
 	yyparse();
 
-
+	//print out the global vars
 	for(i = 0; i < TABLESIZE; ++i){
 		tmp_sym = global_table->table[i];
 		while(tmp_sym != NULL){
@@ -1074,6 +1142,8 @@ int main(void) {
 
 	printf("\t.comm .stracc,%d,%d\n\n",STLEN*WORDSIZE*2,WORDSIZE);
 	printf("\t.comm .strres,%d,%d\n\n",STLEN*WORDSIZE*2,WORDSIZE);
+
+	//print the string literals
 	if(str_counter > 0){
 		printf(".section\t.rodata\n");
 		for(i = 0; i < str_counter; ++i)
@@ -1095,6 +1165,9 @@ int hash_sym(char *sym){
 	return hash % TABLESIZE;
 }
 
+//returns the number of tables read through. This was more useful
+//in earlier versions of the compiler. Now, that is mostly discarded.
+//On return, *out is the symbol if found, or NULL if not.
 int find_symbol(char *sym, symbol **out, sym_table *t){
 	symbol *track;
 	sym_table *ti = t;
@@ -1140,6 +1213,12 @@ symbol *add_symbol(char *name, enum type_ t, enum type_ *a, enum scope_type s, s
 	if(track == NULL){
 		tbl->table[i] = symb;
 		if(symb->args == NULL){
+
+			//The symbol's location is used to track its distance from ebp. Thus,
+			//It can either be based on the stack size or the current number of arguments.
+			//The table tracks both, since arguments have the ARG scope.
+			//For strings, the stack size still has to grow for arguments, since these are
+			//copied to the stack.
 			switch(t){
 				case INTEG:
 					if(s == STACK){		
@@ -1292,6 +1371,8 @@ sym_table *destroy_table(sym_table *loc){
 	return ret;
 }
 
+
+//The workhorse of the compiler. Used to print instructions from a block.
 void print_instructions(instr *block){
 
 	expr *e;
@@ -1300,6 +1381,7 @@ void print_instructions(instr *block){
 	int i;
 	int totalargs = 0;
 
+	//print header info if this is the beginning of a function.
 	if(block->prev == NULL){
 		printf(".globl %s\n  .type %s,@function\n%s:\n", block->function, block->function, block->function);
 		printf("  enter $%d, $0\n", block->stack_size);
@@ -1308,7 +1390,7 @@ void print_instructions(instr *block){
 		arg = block->args;
 		while(arg != NULL && arg != NOARGS){
 			++totalargs;
-
+			//Copy string arguments to the stack.
 			if(arg->type == STRIN){
 				++i;
 				find_symbol(arg->id, &t, local_table);
@@ -1320,6 +1402,8 @@ void print_instructions(instr *block){
 
 		}
 	}
+
+	//Process control flow statements associated with the block, if any.
 	fl = block->f;
 	if(fl != NULL)
 		switch(fl->type){
@@ -1406,7 +1490,7 @@ void print_instructions(instr *block){
 
 
 		}
-
+	//Process the block's instructions.
 	else{
 		e = block->list;
 		while(e != NULL){
@@ -1415,6 +1499,7 @@ void print_instructions(instr *block){
 		}
 	}
 
+	//if the block is the major function block, print return statements.
 	if(block->prev == NULL){
 		printf(".%s_ret:\n  leave\n  ret\n\n", block->function);
 		return;
@@ -1422,7 +1507,7 @@ void print_instructions(instr *block){
 
 }
 
-
+//Okay maybe this is the workhorse. Print an expression's data.
 void print_expr(expr *e, char *function){
 	expr *argslist[MAXARGS];
 	expr *track;
@@ -1450,6 +1535,7 @@ void print_expr(expr *e, char *function){
 				printf("  popl %%eax\n  popl %%ecx\n  addl %%ecx, %%eax\n  pushl %%eax\n");
 				break;
 			case ADDSS:
+				//Copy and concat strings to .stracc, then copy to the stack.
 				--stack_depth;
 				printf("  popl %%eax\n  movl %%esp, %%ebx\n  pushl $%d\n  pushl %%eax\n  pushl $.stracc\n  call strncpy\n  movb $0, %d(%%eax)\n  addl $12, %%esp\n  pushl (%%ebx)\n  pushl $.stracc\n  call strcat\n  movb $0, %d(%%eax)\n  addl $8, %%esp\n  subl $128, %%esp\n  movl %%esp, %%eax\n  pushl $%d\n  pushl $.stracc\n  leal (%%eax), %%eax\n  push %%eax\n  call strncpy\n  movb $0, %d(%%eax)\n  addl $12, %%esp\n", WORDSIZE*STLEN, (WORDSIZE*STLEN)-1, (WORDSIZE*STLEN)-1, (WORDSIZE*STLEN), (WORDSIZE*STLEN)-1);
 				for(i = stack_depth-1; i > 0; --i)
@@ -1457,12 +1543,14 @@ void print_expr(expr *e, char *function){
 				printf("  push %%eax\n");
 				break;
 			case ADDIS:
+				//Same as above, but account for converting int to ascii value
 				printf("  popl %%eax\n  movl %%esp, %%ebx\n  andw $0xff, %%ax\n  movw %%ax, .stracc\n  pushl (%%ebx)\n  pushl $.stracc\n  call strcat\n  movb $0, %d(%%eax)\n  addl $8, %%esp\n  subl $128, %%esp\n  movl %%esp, %%eax\n  pushl $%d\n  pushl $.stracc\n  leal (%%eax), %%eax\n  push %%eax\n  call strncpy\n  movb $0, %d(%%eax)\n  addl $12, %%esp\n", (WORDSIZE*STLEN)-1, (WORDSIZE*STLEN), (WORDSIZE*STLEN)-1);
 				for(i = stack_depth-1; i > 0; --i)
 					printf("  push %d(%%ebx)\n", WORDSIZE*i);
 				printf("  push %%eax\n");
 				break;
 			case ADDSI:
+				//same as above, but account for different order of operands
 				printf("  popl %%edi\n  popl %%eax\n  movl %%esp, %%ebx\n  subl $4, %%ebx\n  andw $0xff, %%ax\n  movw %%ax, .stracc\n  sub $%d, %%esp\n  movl %%esp, %%ecx\n  pushl $.stracc\n  pushl %%ecx\n  call strcpy\n  addl $8, %%esp\n  pushl $%d\n  pushl  %%edi\n  pushl $.stracc\n  call strncpy\n  movb $0, %d(%%eax)\n  addl $12, %%esp\n  pushl %%esp\n  pushl $.stracc\n  call strcat\n  movb $0, %d(%%eax)\n  addl $%d, %%esp\n  subl $128, %%esp\n  movl %%esp, %%eax\n  pushl $%d\n  pushl $.stracc\n  leal (%%eax), %%eax\n  push %%eax\n  call strncpy\n  movb $0, %d(%%eax)\n  addl $12, %%esp\n", WORDSIZE*STLEN, WORDSIZE*STLEN, (WORDSIZE*STLEN)-1,(WORDSIZE*STLEN)-1, 8+(WORDSIZE*STLEN), (WORDSIZE*STLEN), (WORDSIZE*STLEN)-1 );
 				for(i = stack_depth-1; i > 0; --i)
 					printf("  push %d(%%ebx)\n", WORDSIZE*i);
@@ -1482,18 +1570,21 @@ void print_expr(expr *e, char *function){
 				break;
 
 			case BLOCK_JUMP:
+				//jump to a new set of instructions.
 				stack_depth = 0;
 				print_instructions(e->block);
 				break;
 
 
 			default :
+				//For a simple ident, just print its value.
 				if(e->args == NULL){
 					printf("%s", e->data);
 					if(e->type == SET)
 						--stack_depth;
 					else ++stack_depth;
 				}
+				//For a function, process argument expressions in order, then call, then clean up the stack.
 				else{
 					argcounter = 0;
 					int st = stack_depth;
@@ -1511,7 +1602,7 @@ void print_expr(expr *e, char *function){
 					printf("  addl $%d, %%esp\n", argcounter*WORDSIZE);
 
 					if(e->type == STRIN){
-						
+						//if the function returned a string, copy the string to the stack.
 						printf("  movl %%esp, %%ebx\n  subl $4, %%ebx\n  subl $128, %%esp\n  movl %%esp, %%edx\n  pushl $128\n  pushl %%eax\n  leal (%%edx), %%edx\n  pushl %%edx\n  call strncpy\n  movb $0, 127(%%eax)\n  addl $12, %%esp\n");
 						for(i = st; i > 0; --i)
 							printf("  push %d(%%ebx)\n", WORDSIZE*i);
@@ -1529,7 +1620,8 @@ void print_expr(expr *e, char *function){
 
 }
 
-
+//Print comparisons and conditional jump statements.
+//To compare strings, use strcmp.
 char *print_cond(cond *c, int opposite, char *function){
 	
 	expr *e;
@@ -1595,7 +1687,7 @@ char *print_cond(cond *c, int opposite, char *function){
 
 }
 
-
+//Used to wrap an instruction block in an outer block.
 instr *insert_block(instr *b){
 					instr *newblock = malloc(sizeof(instr));
 					newblock->f = NULL;
@@ -1620,7 +1712,7 @@ instr *insert_block(instr *b){
 }
 
 
-
+//Print a type. Usefule for debugging.
 char *print_type(enum type_ t){
 	switch(t){
 		case INTEG:
@@ -1635,6 +1727,7 @@ char *print_type(enum type_ t){
 
 }
 
+//Used for debugging.
 void print_table(sym_table *t){
 
 
