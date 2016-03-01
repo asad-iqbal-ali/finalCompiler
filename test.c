@@ -10,9 +10,13 @@ int main(){
 	s = 3;
 	t = 2;
 
-	if(s < t)
+	if(s < t){
 		printd(s);
-	printd(t);
+		printd(5);
+	}
+	else { printd(t); printd(2);}
+
+	
 	return 1;
 }
 

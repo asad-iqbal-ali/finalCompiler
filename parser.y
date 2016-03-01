@@ -571,11 +571,11 @@ cond_instruction instruction {
 				$$ = $2->prev;
 				}
 | cond_instruction instruction ELSE instruction {
+				$1->a1 = 0;
 				$2->f = $1;
 				$$ = $2->prev;
 				flow *t = malloc(sizeof(flow));
-				t->key = flow_key;
-				++flow_key;
+				t->key = $1->key;			
 				t->type = E;
 				t->con = NULL;
 				t->a1 = NULL;
@@ -1335,9 +1335,18 @@ void print_instructions(instr *block){
 						print_expr(e, block->function);
 						e = e->next;
 				}
+				if(fl->a1 == 0)
+					printf("  jmp .out%d\n", fl->key);
 				printf("  .no%d:\n", fl->key); 
 				break;
-
+			case E: 
+				e = block->list;
+				while(e != NULL){
+					print_expr(e, block->function);
+					e = e->next;
+				}
+				printf("  .out%d:\n", fl->key);
+				break;
 		
 	
 
