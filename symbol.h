@@ -39,6 +39,14 @@ enum compr{
 	DIF
 };
 
+enum ftype{
+	I,
+	E,
+	D,
+	F,
+	W
+};
+
 typedef struct symbol_{
 	char id[MAXIDLEN];
 	enum type_ type;
@@ -58,6 +66,20 @@ typedef struct exp_{
 	struct instr_ *block;
 } expr;
 
+typedef struct cond_{
+	struct exp_* left;
+	struct exp_* right;
+	enum compr c;
+
+} cond;
+
+typedef struct flow_{
+	enum ftype type;
+	struct cond_ *con;
+	struct exp_ *a1;
+	struct exp_ *a2;
+	int key;
+} flow;
 
 typedef struct sym_table_ {
 	symbol **table;
@@ -74,6 +96,7 @@ typedef struct instr_{
 	int stack_size;
 	struct instr_ *prev;
 	struct exp_ *prev_ins;
+	struct flow_ *f;
 
 } instr;
 
@@ -98,3 +121,4 @@ void print_table(sym_table *t);
 
 sym_table *create_table(sym_table *loc);
 sym_table *destroy_table(sym_table *loc);
+char *print_cond(enum compr c, int opposite);

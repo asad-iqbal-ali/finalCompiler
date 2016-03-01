@@ -26,12 +26,15 @@ sym_table *local_table;
 char* glb_strings[MAXSTRNGS];
 int str_counter = 0;
 
-expr *tmp, *tmp2;
+expr *tmp;
+expr *tmp2;
 expr *NOARG = 0;
 symbol *NOARGS = 0;
-instr *f_def, *current_block, *global_block;
+instr *f_def, *current_block, *last_block, *global_block;
 
 char current_function[MAXIDLEN];
+
+int flow_key = 0;
 
 symbol *tmp_sym, *tmp_sym2, *current_args;
 
@@ -44,6 +47,9 @@ symbol *tmp_sym, *tmp_sym2, *current_args;
  enum compr entier;
  struct symbol_ *s;
  struct declar_ *d;
+ struct cond_ *con;
+ struct instr_ *in;
+ struct flow_ *f;
 }
 %token <t> INT
 %token <t> STRING
@@ -78,13 +84,14 @@ symbol *tmp_sym, *tmp_sym2, *current_args;
 %token SHIFTLEFT
 %token MODULO
 
-%type <e> primary_expression expression expression_additive unary_expression expression_postfixee expression_multiplicative argument_expression_list assignment_expression function_definition instruction  compound_instruction expression_instruction iteration_instruction select_instruction jump_instruction condition instruction_list cond_instruction
+%type <e> primary_expression expression expression_additive unary_expression expression_postfixee expression_multiplicative argument_expression_list assignment_expression function_definition 
 %type <s> parameter_declaration parameter_list
 %type <t> type
 %type <d> function_declarator declarator declarator_list declaration declaration_list
 %type <entier> comparison_operator
-
-
+%type <con> condition
+%type <in> jump_instruction instruction compound_instruction expression_instruction iteration_instruction select_instruction instruction_list
+%type <f> cond_instruction
 %%
 
 program :  
@@ -180,29 +187,17 @@ type declarator_list ';' 	{
 		
 								tmp2->data = malloc(sizeof(char)*MAXEXPR);
 								tmp2->data[0] = '\0';
-								if(i == 0){
+								if(tmp_sym->scope == GLOBAL){
+									if(tmp_sym->type == INTEG)
+										snprintf(tmp2->data, MAXEXPR, "  popl %s\n", t->id);
+									else snprintf(tmp2->data, MAXEXPR, "  popl %%edx\n  pushl $%d\n  pushl %%edx\n  leal %s, %%eax\n  pushl %%eax\n  call strncpy\n  movb $0, %d(%%eax)\n  addl $12, %%esp\n", (WORDSIZE*STLEN), tmp_sym->id, (WORDSIZE*STLEN)-1);
+								}
+								else{
 									if(tmp_sym->type == INTEG)
 										snprintf(tmp2->data, MAXEXPR, "  popl -%d(%%ebp)\n", tmp_sym->location);
 									else
 										snprintf(tmp2->data, MAXEXPR, "  leal -%d(%%ebp), %%eax\n  pushl %%eax\n  call strncpy\n  movb $0, %d(%%eax)\n  addl $12, %%esp\n", tmp_sym->location, (WORDSIZE*STLEN)-1);
 								}
-								else{
-									char *cur = tmp2->data;
-									char *end = cur + MAXEXPR;
-									cur += snprintf(tmp2->data, MAXEXPR, "  movl (%%ebp), %%ecx\n");
-									while(i > 1){
-										cur += snprintf(cur, end-cur,"  movl (%%ecx), %%ecx\n");
-										--i;
-									}
-									if(tmp_sym->type == INTEG)
-										cur += snprintf(cur, end-cur, "  popl -%d(%%ecx)\n", tmp_sym->location);
-									else
-										snprintf(tmp2->data, MAXEXPR, "  leal -%d(%%ecx), %%eax\n  pushl %%eax\n  call strncpy\n  movb $0, %d(%%eax)\n  addl $12, %%esp\n", tmp_sym->location, (WORDSIZE*STLEN)-1);
-		
-								}
-	
-
-
 								tmp2->args = NULL;
 
 								while(last_instruction->next != NULL)
@@ -284,7 +279,7 @@ declaration 		{$$ = $1;}		// Set locals
 declarator :  
 IDENT 			{
 				int i = find_symbol($1, &tmp_sym, local_table);
-				if(tmp_sym != NULL){
+				if(tmp_sym != NULL && i == 0){
 					printf("symbol %s\n", $1);
 					yyerror("symbol already declared");
 					return -1;
@@ -298,7 +293,7 @@ IDENT 			{
 			}		// Create Variable
 | IDENT assignment expression {
 				int i = find_symbol($1, &tmp_sym, local_table);
-				if(tmp_sym != NULL){
+				if(tmp_sym != NULL && i == 0){
 					printf("symbol %s\n", $1);
 					yyerror("symbol already declared");
 					return -1;
@@ -376,27 +371,68 @@ instruction :
 expression_instruction :              
 expression ';'  {
 			tmp = current_block->list;
-			if(tmp == NULL)
-				current_block->list = $1;
-			else{
-				while(tmp->next != NULL)
+			if(tmp != NULL){			
+				while(tmp->next != NULL){
 					tmp = tmp->next;
-				tmp->next = $1;
-
+				}
+				tmp->next = malloc(sizeof(expr));
+				tmp = tmp->next;
 			}
-			$$ = $1;
+			else {
+				current_block->list = malloc(sizeof(expr));
+				tmp = current_block->list;
+			}
+			tmp->type = BLOCK_JUMP;
+			tmp->next = NULL;
+			tmp->block = malloc(sizeof(instr));
+			tmp->block->f = NULL;
+			tmp->block->prev = current_block;
+			tmp->block->function = current_block->function;
+			current_block = tmp->block;
+			current_block->prev_ins = tmp;
+
+
+			current_block->list = $1;
+			current_block->stack_size = local_table->size;
+			last_block = current_block;
+			current_block = current_block->prev;
+			if(current_block == NULL)
+				current_block = global_block;
+
+			$$ = last_block;
 		}
 | assignment_expression ';' {
-				tmp = current_block->list;
-				if(tmp == NULL)
-					current_block->list = $1;
-				else{
-					while(tmp->next != NULL)
-						tmp = tmp->next;
-					tmp->next = $1;
 
+				tmp = current_block->list;
+				if(tmp != NULL){			
+					while(tmp->next != NULL){
+						tmp = tmp->next;
+					}
+					tmp->next = malloc(sizeof(expr));
+					tmp = tmp->next;
 				}
-				$$ = $1;
+				else {
+					current_block->list = malloc(sizeof(expr));
+					tmp = current_block->list;
+				}
+				tmp->type = BLOCK_JUMP;
+				tmp->next = NULL;
+				tmp->block = malloc(sizeof(instr));
+				tmp->block->f = NULL;
+				tmp->block->prev = current_block;
+				tmp->block->function = current_block->function;
+				current_block = tmp->block;
+				current_block->prev_ins = tmp;
+
+
+				current_block->list = $1;
+				current_block->stack_size = local_table->size;
+				last_block = current_block;
+				current_block = current_block->prev;
+				if(current_block == NULL)
+					current_block = global_block;
+
+				$$ = last_block;
 			    }
 ;
 
@@ -425,29 +461,18 @@ IDENT assignment expression 	{
 					tmp2->type = SET;
 		
 					tmp2->data = malloc(sizeof(char)*MAXEXPR);
-					if(i == 0){
+					
+					if(tmp_sym->scope == GLOBAL){
+						if(tmp_sym->type == INTEG)
+							snprintf(tmp2->data, MAXEXPR, "  popl %s\n", $1);
+						else snprintf(tmp2->data, MAXEXPR, "  popl %%edx\n  pushl $%d\n  pushl %%edx\n  leal %s, %%eax\n  pushl %%eax\n  call strncpy\n  movb $0, %d(%%eax)\n  addl $12, %%esp\n", (WORDSIZE*STLEN), $1, (WORDSIZE*STLEN)-1);
+					}
+					else{
 						if(tmp_sym->type == INTEG)
 							snprintf(tmp2->data, MAXEXPR, "  popl %s%d(%%ebp)\n", (tmp_sym->scope == ARG? "":"-"),tmp_sym->location);
 						else
 							snprintf(tmp2->data, MAXEXPR, "  popl %%edx\n  pushl $%d\n  pushl %%edx\n  leal %s%d(%%ebp), %%eax\n  pushl %%eax\n  call strncpy\n  movb $0, %d(%%eax)\n  addl $12, %%esp\n", (WORDSIZE*STLEN), (tmp_sym->scope == ARG? "":"-"), tmp_sym->location, (WORDSIZE*STLEN)-1);
 					}
-					else{
-						char *cur = tmp2->data;
-						char *end = cur + MAXEXPR;
-						cur += snprintf(tmp2->data, MAXEXPR, "  movl (%%ebp), %%ecx\n");
-						while(i > 1){
-							cur += snprintf(cur, end-cur, "  movl (%%ecx), %%ecx\n");
-							--i;
-						}
-						if(tmp_sym->type == INTEG)
-							cur += snprintf(cur, end-cur, "  popl %s%d(%%ecx)\n", (tmp_sym->scope == ARG? "":"-"),tmp_sym->location);
-						else
-							cur += snprintf(cur, MAXEXPR, "  popl %%edx\n  pushl $%d\n  pushl %%edx\n  leal %s%d(%%ecx), %%eax\n  pushl %%eax\n  call strncpy\n  movb $0, %d(%%eax)\n  addl $12, %%esp\n", (WORDSIZE*STLEN), (tmp_sym->scope == ARG? "":"-"), tmp_sym->location, (WORDSIZE*STLEN)-1);
-		
-					}
-	
-
-
 					tmp2->args = NULL;
 					tmp2->next = NULL;
 					$$ = $3;
@@ -456,11 +481,11 @@ IDENT assignment expression 	{
 
 compound_instruction :  
 block_start declaration_list instruction_list block_end {
-			$$=$3;
+			$$=last_block;
 			}
-| block_start declaration_list block_end {} 
-| block_start instruction_list block_end {$$=$2;}
-| block_start block_end {} 
+| block_start declaration_list block_end {$$=last_block;} 
+| block_start instruction_list block_end {$$=last_block;}
+| block_start block_end {$$=last_block;} 
 ;
 
 
@@ -471,6 +496,7 @@ block_start :
 		local_table = create_table(local_table);
 		if(f_def == NULL){
 			f_def = malloc(sizeof(instr));
+			f_def->f = NULL;
 			f_def->prev = NULL;
 			f_def->list = NULL;
 			f_def->prev_ins = NULL;
@@ -502,6 +528,7 @@ block_start :
 			tmp->type = BLOCK_JUMP;
 			tmp->next = NULL;
 			tmp->block = malloc(sizeof(instr));
+			tmp->block->f = NULL;
 			tmp->block->prev = current_block;
 			tmp->block->function = current_block->function;
 			current_block = tmp->block;
@@ -520,6 +547,7 @@ block_end :
 			return -1;
 		}
 		current_block->stack_size = local_table->size;
+		last_block = current_block;
 		current_block = current_block->prev;
 		if(current_block == NULL)
 			current_block = global_block;
@@ -532,35 +560,92 @@ block_end :
 
 instruction_list :  
 instruction  {$$=$1;}
-| instruction_list instruction 	{/*
-			printf("returned\n");
-					tmp = $1;
-					while(tmp->next != NULL){
-						tmp = tmp->next;
-					}
-
-					tmp->next = $2;
-					$$ = $1;printf("returned\n");*/ $$ = $1;
+| instruction_list instruction 	{
+				 
 				}
 ;
 
 select_instruction :  
-cond_instruction instruction 
-| cond_instruction instruction ELSE instruction 
+cond_instruction instruction {
+				$2->f = $1;
+				$$ = $2->prev;
+				}
+| cond_instruction instruction ELSE instruction {
+				$2->f = $1;
+				$$ = $2->prev;
+				flow *t = malloc(sizeof(flow));
+				t->key = flow_key;
+				++flow_key;
+				t->type = E;
+				t->con = NULL;
+				t->a1 = NULL;
+				t->a2 = NULL;
+				$4->f = t;
+				}
+
 ;
 
 cond_instruction :  
-IF '(' condition ')' {$$=$3;} 
+IF '(' condition ')' {
+			$$ = malloc(sizeof(flow));
+			$$->key = flow_key;
+			++flow_key;
+			$$->type = I;
+			$$->con = $3;
+			$$->a1 = NULL;
+			$$->a2 = NULL;
+			} 
 ;
 
 iteration_instruction :  
-WHILE '(' condition ')' instruction {printf("while loop\n");}// Handle while loop
+WHILE '(' condition ')' instruction {
+					flow *t = malloc(sizeof(flow));
+					t->key = flow_key;
+					++flow_key;
+					t->type = W;
+					t->con = $3;
+					t->a1 = NULL;
+					t->a2 = NULL;
+					$5->f = t;
+					$$ = $5->prev;
+
+					}// Handle while loop
 | DO instruction WHILE '(' condition ')'  {printf("do/while loop\n");}
-| FOR '(' assignment_expression ';' condition ';' assignment_expression ')' instruction  {printf("for loop ");} 
+| FOR '(' assignment_expression ';' condition ';' assignment_expression ')' instruction  {
+
+					flow *t = malloc(sizeof(flow));
+					t->key = flow_key;
+					++flow_key;
+					t->type = F;
+					t->con = $5;
+					t->a1 = $3;
+					t->a2 = $7;
+					$9->f = t;
+					$$ = $9->prev;} 
 ;
 
 jump_instruction:  
 RETURN expression ';' {
+			tmp = current_block->list;
+			if(tmp != NULL){			
+				while(tmp->next != NULL){
+					tmp = tmp->next;
+				}
+				tmp->next = malloc(sizeof(expr));
+				tmp = tmp->next;
+			}
+			else {
+				current_block->list = malloc(sizeof(expr));
+				tmp = current_block->list;
+			}
+			tmp->type = BLOCK_JUMP;
+			tmp->next = NULL;
+			tmp->block = malloc(sizeof(instr));
+			tmp->block->f = NULL;
+			tmp->block->prev = current_block;
+			tmp->block->function = current_block->function;
+			current_block = tmp->block;
+			current_block->prev_ins = tmp;
 			
 
 			tmp = $2;
@@ -581,21 +666,25 @@ RETURN expression ';' {
 			tmp2->next->args = NULL;				
 			tmp2->next->next = NULL;
 			tmp = current_block->list;
-			if(tmp == NULL)
-				current_block->list = $2;
-			else{
-				while(tmp->next != NULL)
-					tmp = tmp->next;
-				tmp->next = $2;
+			current_block->list = $2;
 
-			}
+			current_block->stack_size = local_table->size;
+			last_block = current_block;
+			current_block = current_block->prev;
+
+			$$ = last_block;
 			
 	
 			}
 ;
 
 condition :  
-expression comparison_operator expression {printf("comparison\n");}
+expression comparison_operator expression {
+						$$ = malloc(sizeof(cond));
+						$$->left = $1;
+						$$->right = $3;
+						$$->c = $2;
+						}
 ;
 
 comparison_operator :  
@@ -892,23 +981,16 @@ IDENT  {
 	if(tmp_sym->args == NULL){
 		
 		$$->data = malloc(sizeof(char)*MAXEXPR);
+		if(tmp_sym->scope == GLOBAL){
+			if(tmp_sym->type == STRIN)	
+				snprintf($$->data, MAXEXPR, "  leal %s, %%eax\n  pushl %%eax\n", $1);
+			else snprintf($$->data, MAXEXPR, "  pushl %s\n", $1);
 
-		if(i == 0)
+		}
+		else{
 			if(tmp_sym->type == STRIN)
 				snprintf($$->data, MAXEXPR, "  leal %s%d(%%ebp), %%eax\n  pushl %%eax\n", (tmp_sym->scope == ARG? "":"-"), tmp_sym->location);
 			else snprintf($$->data, MAXEXPR, "  pushl %s%d(%%ebp)\n", (tmp_sym->scope == ARG? "":"-"), tmp_sym->location);
-		else{
-			char *cur = $$->data;
-			char *end = cur + MAXEXPR;
-			cur += snprintf($$->data, MAXEXPR, "  movl (%%ebp), %%ecx\n");
-			while(i > 1){
-				cur += snprintf(cur, end-cur,"  movl (%%ecx), %%ecx\n");
-				--i;
-			}
-			if(tmp_sym->type == STRIN)
-				cur += snprintf(cur, end-cur, "  leal %s%d(%%ecx), %%eax\n  pushl %%eax\n", (tmp_sym->scope == ARG? "":"-"), tmp_sym->location);
-			else cur += snprintf(cur, end-cur, "  pushl %s%d(%%ecx)\n", (tmp_sym->scope == ARG? "":"-"), tmp_sym->location);
-		
 		}
 		$$->args = NULL;
 	}
@@ -953,6 +1035,7 @@ int main(void) {
 	f_def = NULL;
 
 	global_block = malloc(sizeof(instr));
+	global_block->f = NULL;
 	global_block->list = NULL;
 	global_block->stack_size = 0;
 	current_block = global_block;
@@ -967,21 +1050,25 @@ int main(void) {
 	global_block->stack_size = global_table->size;
 
 
-	if(global_block->stack_size > 0){
-		printf(".globl start\nstart:\n  enter $%d, $0\n", global_block->stack_size);
-		if(global_block->list != NULL){
-			tmp = global_block->list;
-			while(tmp != NULL){
-				print_expr(tmp, NULL);
-				tmp = tmp->next;
-			}
-
-		}
-
+	if(global_block->list != NULL){
+		printf(".globl start\nstart:\n  enter $0, $0\n");
+		tmp = global_block->list;
+		while(tmp != NULL){
+			print_expr(tmp, NULL);
+			tmp = tmp->next;
+		}	
 		printf("  jmp main\n\n");
 
 	}
 
+	for(i = 0; i < TABLESIZE; ++i){
+		tmp_sym = global_table->table[i];
+		while(tmp_sym != NULL){
+			if(tmp_sym->args == NULL)
+				printf("\t.comm %s,%d,%d\n", tmp_sym->id, (tmp_sym->type == STRIN? (STLEN*WORDSIZE):WORDSIZE), WORDSIZE);
+			tmp_sym = tmp_sym->next;
+		}
+	}
 
 	printf("\t.comm .stracc,%d,%d\n\n",STLEN*WORDSIZE*2,WORDSIZE);
 	printf("\t.comm .strres,%d,%d\n\n",STLEN*WORDSIZE*2,WORDSIZE);
@@ -1039,7 +1126,7 @@ symbol *add_symbol(char *name, enum type_ t, enum type_ *a, enum scope_type s, s
 	strcpy(symb->id, name);
 	symb->type = t;
 	symb->args = a;
-	symb->scope = s;
+	symb->scope = (tbl->prev == NULL? GLOBAL:s);
 	symb->next = NULL;
 
 	int i = hash_sym(symb->id);
@@ -1168,7 +1255,7 @@ sym_table *create_table(sym_table *loc){
 		loc->next->table[i] = NULL;
 	loc->next->prev = loc;
 	loc->next->next = NULL;
-	loc->next->size = 0;
+	loc->next->size = loc->size;
 	loc->next->arg_size = 0;
 	return loc->next;
 
@@ -1189,57 +1276,86 @@ sym_table *destroy_table(sym_table *loc){
 			s_track = s_next;
 		}
 	}
-	
+	if(ret != NULL){
+		ret->size = loc->size;
+		ret->next = NULL;
+	}
+
 	free(loc->table);
 	free(loc);
-	if(ret != NULL)
-		ret->next = NULL;
-
+	
 	return ret;
 }
 
 void print_instructions(instr *block){
 
 	expr *e;
-	symbol *arg, *tmp;
+	flow *fl;
+	symbol *arg, *t;
 	int i;
 	int totalargs = 0;
 
-	if(block->prev == NULL)
-		printf(".globl %s\n  .type %s,@function\n%s:\n", block->function, block->function, block->function);
-
-	printf("  enter $%d, $0\n", block->stack_size);
-
 	if(block->prev == NULL){
-		i = 0;
+		printf(".globl %s\n  .type %s,@function\n%s:\n", block->function, block->function, block->function);
+		printf("  enter $%d, $0\n", block->stack_size);
 
+		i = 0;
 		arg = block->args;
 		while(arg != NULL && arg != NOARGS){
 			++totalargs;
 
 			if(arg->type == STRIN){
 				++i;
-				find_symbol(arg->id, &tmp, local_table);
+				find_symbol(arg->id, &t, local_table);
 				printf("  pushl $128\n  pushl %d(%%ebp)\n  leal -%d(%%ebp) %%eax\n  pushl %%eax\n  call strncpy\n  movb  $0, %d(%%eax)\n  addl $12, %%esp\n",4*(totalargs+1),i*WORDSIZE*STLEN, (WORDSIZE*STLEN)-1);		
 			}
 			arg = arg->next;
 
+		
+
+		}
+	}
+	fl = block->f;
+	if(fl != NULL)
+		switch(fl->type){
+			case I: 
+				e = fl->con->left;
+				while(e != NULL){
+					print_expr(e, block->function);
+					e = e->next;
+				}
+				e = fl->con->right;
+				while(e != NULL){
+					print_expr(e, block->function);
+					e = e->next;
+				}
+				printf("  popl %%edx\n  popl %%eax\n  cmp %%edx, %%eax\n  %s .no%d\n", print_cond(fl->con->c, 1), fl->key);
+				e = block->list;
+					while(e != NULL){
+						print_expr(e, block->function);
+						e = e->next;
+				}
+				printf("  .no%d:\n", fl->key); 
+				break;
+
+		
+	
+
+
 		}
 
-	}
-
-	e = block->list;
-	while(e != NULL){
-		print_expr(e, block->function);
-		e = e->next;
+	else{
+		e = block->list;
+		while(e != NULL){
+			print_expr(e, block->function);
+			e = e->next;
+		}
 	}
 
 	if(block->prev == NULL){
 		printf(".%s_ret:\n  leave\n  ret\n\n", block->function);
 		return;
 	}
-	else printf("  leave\n");
-
 
 }
 
@@ -1314,6 +1430,30 @@ void print_expr(expr *e, char *function){
 	 	}
 
 }
+
+
+char *print_cond(enum compr c, int opposite){
+
+	switch(c){
+		case INFE:
+		 	return (opposite? "jge":"jl");
+		case EGA:
+			return (opposite? "jne":"je");
+		case SU:
+			return (opposite? "jle":"jg");
+		case INFEQUA:
+			return (opposite? "jg":"jle");
+		case SUPEQUA:
+			return (opposite? "jl":"jge");
+		case DIF:
+			return (opposite? "je":"jne");
+
+
+	}
+
+
+}
+
 /*
 
 char *print_type(enum type_ t){

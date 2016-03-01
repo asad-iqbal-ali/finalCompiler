@@ -1,12 +1,18 @@
+extern int printd(int s);
+
+
+
 int main(){
 
-	string s;
+	int s;
+	int t;
 
-	{
-		s = "dasj";
+	s = 3;
+	t = 2;
 
-	}
-
+	if(s < t)
+		printd(s);
+	printd(t);
 	return 1;
 }
 
