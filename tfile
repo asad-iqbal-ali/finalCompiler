@@ -1,5 +1,0 @@
-#!/bin/bash
-
-gcc -E $1 -o prep
-./cstr < prep > test.S
-gcc lib.o test.S
