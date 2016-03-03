@@ -5,7 +5,7 @@
 	#include "symbol.h"
 	#define TABLESIZE 100
 	#define WORDSIZE 4
-	#define STLEN 32
+	#define STLEN 128
 	#define MAXEXPR 1024
 	#define MAXSTRNGS 100
 	#define MAXARGS 32
@@ -206,13 +206,13 @@ type declarator_list ';' 	{
 								if(tmp_sym->scope == GLOBAL){
 									if(tmp_sym->type == INTEG)
 										snprintf(tmp2->data, MAXEXPR, "  popl %s\n", t->id);
-									else snprintf(tmp2->data, MAXEXPR, "  popl %%edx\n  pushl $%d\n  pushl %%edx\n  leal %s, %%eax\n  pushl %%eax\n  call strncpy\n  movb $0, %d(%%eax)\n  addl $12, %%esp\n", (WORDSIZE*STLEN), tmp_sym->id, (WORDSIZE*STLEN)-1);
+									else snprintf(tmp2->data, MAXEXPR, "  popl %%edx\n  pushl $%d\n  pushl %%edx\n  leal %s, %%eax\n  pushl %%eax\n  call strncpy\n  movb $0, %d(%%eax)\n  addl $12, %%esp\n", STLEN, tmp_sym->id, STLEN-1);
 								}
 								else{
 									if(tmp_sym->type == INTEG)
 										snprintf(tmp2->data, MAXEXPR, "  popl -%d(%%ebp)\n", tmp_sym->location);
 									else
-										snprintf(tmp2->data, MAXEXPR, "  leal -%d(%%ebp), %%eax\n  pushl %%eax\n  call strncpy\n  movb $0, %d(%%eax)\n  addl $12, %%esp\n", tmp_sym->location, (WORDSIZE*STLEN)-1);
+										snprintf(tmp2->data, MAXEXPR, "  leal -%d(%%ebp), %%eax\n  pushl %%eax\n  call strncpy\n  movb $0, %d(%%eax)\n  addl $12, %%esp\n", tmp_sym->location, STLEN-1);
 								}
 								tmp2->args = NULL;
 
@@ -497,13 +497,13 @@ IDENT assignment expression 	{
 					if(tmp_sym->scope == GLOBAL){
 						if(tmp_sym->type == INTEG)
 							snprintf(tmp2->data, MAXEXPR, "  popl %s\n", $1);
-						else snprintf(tmp2->data, MAXEXPR, "  popl %%edx\n  pushl $%d\n  pushl %%edx\n  leal %s, %%eax\n  pushl %%eax\n  call strncpy\n  movb $0, %d(%%eax)\n  addl $12, %%esp\n", (WORDSIZE*STLEN), $1, (WORDSIZE*STLEN)-1);
+						else snprintf(tmp2->data, MAXEXPR, "  popl %%edx\n  pushl $%d\n  pushl %%edx\n  leal %s, %%eax\n  pushl %%eax\n  call strncpy\n  movb $0, %d(%%eax)\n  addl $12, %%esp\n", STLEN, $1, STLEN-1);
 					}
 					else{
 						if(tmp_sym->type == INTEG)
 							snprintf(tmp2->data, MAXEXPR, "  popl %s%d(%%ebp)\n", (tmp_sym->scope == ARG? "":"-"),tmp_sym->location);
 						else
-							snprintf(tmp2->data, MAXEXPR, "  popl %%edx\n  pushl $%d\n  pushl %%edx\n  leal %s%d(%%ebp), %%eax\n  pushl %%eax\n  call strncpy\n  movb $0, %d(%%eax)\n  addl $12, %%esp\n", (WORDSIZE*STLEN), (tmp_sym->scope == ARG? "":"-"), tmp_sym->location, (WORDSIZE*STLEN)-1);
+							snprintf(tmp2->data, MAXEXPR, "  popl %%edx\n  pushl $%d\n  pushl %%edx\n  leal %s%d(%%ebp), %%eax\n  pushl %%eax\n  call strncpy\n  movb $0, %d(%%eax)\n  addl $12, %%esp\n", STLEN, (tmp_sym->scope == ARG? "":"-"), tmp_sym->location, STLEN-1);
 					}
 					tmp2->args = NULL;
 					tmp2->next = NULL;
@@ -734,7 +734,7 @@ RETURN expression ';' {
 			if($2 != NULL){
 				tmp2->next->data = malloc(sizeof(char)*MAXEXPR);
 				if(tmp2->ret_type == STRIN){
-					snprintf(tmp2->next->data, MAXEXPR, "  popl %%edx\n  pushl $%d\n  pushl %%edx\n  pushl $.strres\n  call strncpy\n  movb $0, %d(%%eax)\n  addl $12, %%esp\n", (WORDSIZE*STLEN), (WORDSIZE*STLEN)-1); 
+					snprintf(tmp2->next->data, MAXEXPR, "  popl %%edx\n  pushl $%d\n  pushl %%edx\n  pushl $.strres\n  call strncpy\n  movb $0, %d(%%eax)\n  addl $12, %%esp\n", STLEN, STLEN-1); 
 
 				}
 	
@@ -1051,37 +1051,32 @@ primary_expression :
 IDENT  {
 
 	int i = find_symbol($1, &tmp_sym, local_table);
+
 	if(tmp_sym == NULL){
 		yyerror("symbol not found 2");
 		return -1;
 	}
-	$$ = malloc(sizeof(expr));
 
+	$$ = malloc(sizeof(expr));
 	$$->type = tmp_sym->type;
 	$$->ret_type = tmp_sym->type;
-
-	if(tmp_sym->args == NULL){
-		$$->func = 0;
-		$$->data = malloc(sizeof(char)*MAXEXPR);
-		if(tmp_sym->scope == GLOBAL){
-			if(tmp_sym->type == STRIN)	
-				snprintf($$->data, MAXEXPR, "  leal %s, %%eax\n  pushl %%eax\n", $1);
-			else snprintf($$->data, MAXEXPR, "  pushl %s\n", $1);
-
-		}
-		else{
-			if(tmp_sym->type == STRIN)
-				snprintf($$->data, MAXEXPR, "  leal %s%d(%%ebp), %%eax\n  pushl %%eax\n", (tmp_sym->scope == ARG? "":"-"), tmp_sym->location);
-			else snprintf($$->data, MAXEXPR, "  pushl %s%d(%%ebp)\n", (tmp_sym->scope == ARG? "":"-"), tmp_sym->location);
-		}
-		$$->args = NULL;
-	}
-
-	else{
-		$$->data = $1;
-		$$->func = 1;
-	}
+	$$->args = NULL;
 	$$->next = NULL; 
+
+	$$->func = 0;
+	$$->data = malloc(sizeof(char)*MAXEXPR);
+
+	if(tmp_sym->scope == GLOBAL){
+		if(tmp_sym->type == STRIN)	
+			snprintf($$->data, MAXEXPR, "  leal %s, %%eax\n  pushl %%eax\n", $1);
+		else snprintf($$->data, MAXEXPR, "  pushl %s\n", $1);
+	}
+	else{
+		if(tmp_sym->type == STRIN)
+			snprintf($$->data, MAXEXPR, "  leal %s%d(%%ebp), %%eax\n  pushl %%eax\n", (tmp_sym->scope == ARG? "":"-"), tmp_sym->location);
+		else snprintf($$->data, MAXEXPR, "  pushl %s%d(%%ebp)\n", (tmp_sym->scope == ARG? "":"-"), tmp_sym->location);
+	}
+
 	}
 | CONST_INT	{
 		$$ = malloc(sizeof(expr));
@@ -1233,12 +1228,12 @@ symbol *add_symbol(char *name, enum type_ t, enum type_ *a, enum scope_type s, s
 					break;
 				case STRIN:
 					if(s == STACK){
-						tbl->size += WORDSIZE*STLEN;
+						tbl->size += STLEN;
 						symb->location = tbl->size;
 					}
 					else if(s == ARG){	
 						tbl->arg_size += WORDSIZE;
-						tbl->size += WORDSIZE*STLEN;
+						tbl->size += STLEN;
 						symb->location = tbl->size;
 						symb->scope = STACK;
 					}
@@ -1301,12 +1296,12 @@ symbol *add_symbol(char *name, enum type_ t, enum type_ *a, enum scope_type s, s
 					break;
 				case STRIN:
 					if(s == STACK){
-						tbl->size += WORDSIZE*STLEN;
+						tbl->size += STLEN;
 						symb->location = tbl->size;
 					}
 					else if(s == ARG){	
 						tbl->arg_size += WORDSIZE;
-						tbl->size += WORDSIZE*STLEN;
+						tbl->size += STLEN;
 						symb->location = tbl->size;
 						symb->scope = STACK;
 					}
@@ -1394,7 +1389,7 @@ void print_instructions(instr *block){
 			if(arg->type == STRIN){
 				++i;
 				find_symbol(arg->id, &t, local_table);
-				printf("  pushl $128\n  pushl %d(%%ebp)\n  leal -%d(%%ebp), %%eax\n  pushl %%eax\n  call strncpy\n  movb  $0, %d(%%eax)\n  addl $12, %%esp\n",4*(totalargs+1),i*WORDSIZE*STLEN, (WORDSIZE*STLEN)-1);		
+				printf("  pushl $%d\n  pushl %d(%%ebp)\n  leal -%d(%%ebp), %%eax\n  pushl %%eax\n  call strncpy\n  movb  $0, %d(%%eax)\n  addl $12, %%esp\n", STLEN, WORDSIZE*(totalargs+1),i*STLEN, STLEN-1);		
 			}
 			arg = arg->next;
 
@@ -1537,21 +1532,21 @@ void print_expr(expr *e, char *function){
 			case ADDSS:
 				//Copy and concat strings to .stracc, then copy to the stack.
 				--stack_depth;
-				printf("  popl %%eax\n  movl %%esp, %%ebx\n  pushl $%d\n  pushl %%eax\n  pushl $.stracc\n  call strncpy\n  movb $0, %d(%%eax)\n  addl $12, %%esp\n  pushl (%%ebx)\n  pushl $.stracc\n  call strcat\n  movb $0, %d(%%eax)\n  addl $8, %%esp\n  subl $128, %%esp\n  movl %%esp, %%eax\n  pushl $%d\n  pushl $.stracc\n  leal (%%eax), %%eax\n  push %%eax\n  call strncpy\n  movb $0, %d(%%eax)\n  addl $12, %%esp\n", WORDSIZE*STLEN, (WORDSIZE*STLEN)-1, (WORDSIZE*STLEN)-1, (WORDSIZE*STLEN), (WORDSIZE*STLEN)-1);
+				printf("  popl %%eax\n  movl %%esp, %%ebx\n  pushl $%d\n  pushl %%eax\n  pushl $.stracc\n  call strncpy\n  movb $0, %d(%%eax)\n  addl $12, %%esp\n  pushl (%%ebx)\n  pushl $.stracc\n  call strcat\n  movb $0, %d(%%eax)\n  addl $8, %%esp\n  subl $%d, %%esp\n  movl %%esp, %%eax\n  pushl $%d\n  pushl $.stracc\n  leal (%%eax), %%eax\n  push %%eax\n  call strncpy\n  movb $0, %d(%%eax)\n  addl $12, %%esp\n", STLEN, STLEN-1, STLEN-1,STLEN, STLEN, STLEN-1);
 				for(i = stack_depth-1; i > 0; --i)
 					printf("  push %d(%%ebx)\n", WORDSIZE*i);
 				printf("  push %%eax\n");
 				break;
 			case ADDIS:
 				//Same as above, but account for converting int to ascii value
-				printf("  popl %%eax\n  movl %%esp, %%ebx\n  andw $0xff, %%ax\n  movw %%ax, .stracc\n  pushl (%%ebx)\n  pushl $.stracc\n  call strcat\n  movb $0, %d(%%eax)\n  addl $8, %%esp\n  subl $128, %%esp\n  movl %%esp, %%eax\n  pushl $%d\n  pushl $.stracc\n  leal (%%eax), %%eax\n  push %%eax\n  call strncpy\n  movb $0, %d(%%eax)\n  addl $12, %%esp\n", (WORDSIZE*STLEN)-1, (WORDSIZE*STLEN), (WORDSIZE*STLEN)-1);
+				printf("  popl %%eax\n  movl %%esp, %%ebx\n  andw $0xff, %%ax\n  movw %%ax, .stracc\n  pushl (%%ebx)\n  pushl $.stracc\n  call strcat\n  movb $0, %d(%%eax)\n  addl $8, %%esp\n  subl $%d, %%esp\n  movl %%esp, %%eax\n  pushl $%d\n  pushl $.stracc\n  leal (%%eax), %%eax\n  push %%eax\n  call strncpy\n  movb $0, %d(%%eax)\n  addl $12, %%esp\n", STLEN-1,STLEN,  STLEN, STLEN-1);
 				for(i = stack_depth-1; i > 0; --i)
 					printf("  push %d(%%ebx)\n", WORDSIZE*i);
 				printf("  push %%eax\n");
 				break;
 			case ADDSI:
 				//same as above, but account for different order of operands
-				printf("  popl %%edi\n  popl %%eax\n  movl %%esp, %%ebx\n  subl $4, %%ebx\n  andw $0xff, %%ax\n  movw %%ax, .stracc\n  sub $%d, %%esp\n  movl %%esp, %%ecx\n  pushl $.stracc\n  pushl %%ecx\n  call strcpy\n  addl $8, %%esp\n  pushl $%d\n  pushl  %%edi\n  pushl $.stracc\n  call strncpy\n  movb $0, %d(%%eax)\n  addl $12, %%esp\n  pushl %%esp\n  pushl $.stracc\n  call strcat\n  movb $0, %d(%%eax)\n  addl $%d, %%esp\n  subl $128, %%esp\n  movl %%esp, %%eax\n  pushl $%d\n  pushl $.stracc\n  leal (%%eax), %%eax\n  push %%eax\n  call strncpy\n  movb $0, %d(%%eax)\n  addl $12, %%esp\n", WORDSIZE*STLEN, WORDSIZE*STLEN, (WORDSIZE*STLEN)-1,(WORDSIZE*STLEN)-1, 8+(WORDSIZE*STLEN), (WORDSIZE*STLEN), (WORDSIZE*STLEN)-1 );
+				printf("  popl %%edi\n  popl %%eax\n  movl %%esp, %%ebx\n  subl $%d, %%ebx\n  andw $0xff, %%ax\n  movw %%ax, .stracc\n  sub $%d, %%esp\n  movl %%esp, %%ecx\n  pushl $.stracc\n  pushl %%ecx\n  call strcpy\n  addl $8, %%esp\n  pushl $%d\n  pushl  %%edi\n  pushl $.stracc\n  call strncpy\n  movb $0, %d(%%eax)\n  addl $12, %%esp\n  pushl %%esp\n  pushl $.stracc\n  call strcat\n  movb $0, %d(%%eax)\n  addl $%d, %%esp\n  subl $%d, %%esp\n  movl %%esp, %%eax\n  pushl $%d\n  pushl $.stracc\n  leal (%%eax), %%eax\n  push %%eax\n  call strncpy\n  movb $0, %d(%%eax)\n  addl $12, %%esp\n", WORDSIZE,STLEN, STLEN, STLEN-1,STLEN-1, 8+STLEN, STLEN, STLEN, STLEN-1 );
 				for(i = stack_depth-1; i > 0; --i)
 					printf("  push %d(%%ebx)\n", WORDSIZE*i);
 				printf("  push %%eax\n");
@@ -1603,7 +1598,7 @@ void print_expr(expr *e, char *function){
 
 					if(e->type == STRIN){
 						//if the function returned a string, copy the string to the stack.
-						printf("  movl %%esp, %%ebx\n  subl $4, %%ebx\n  subl $128, %%esp\n  movl %%esp, %%edx\n  pushl $128\n  pushl %%eax\n  leal (%%edx), %%edx\n  pushl %%edx\n  call strncpy\n  movb $0, 127(%%eax)\n  addl $12, %%esp\n");
+						printf("  movl %%esp, %%ebx\n  subl $%d, %%ebx\n  subl $%d, %%esp\n  movl %%esp, %%edx\n  pushl $%d\n  pushl %%eax\n  leal (%%edx), %%edx\n  pushl %%edx\n  call strncpy\n  movb $0, %d(%%eax)\n  addl $12, %%esp\n",WORDSIZE,STLEN,STLEN,STLEN-1);
 						for(i = st; i > 0; --i)
 							printf("  push %d(%%ebx)\n", WORDSIZE*i);
 						printf("  push %%eax\n");
