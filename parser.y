@@ -9,6 +9,7 @@
 	#define MAXEXPR 1024
 	#define MAXSTRNGS 100
 	#define MAXARGS 32
+	#define ERRLEN 256
 extern int yylineno;
 
 int yywrap(){
@@ -17,7 +18,7 @@ int yywrap(){
 
 
 void yyerror(const char *str){
-	fprintf(stderr, "At line: %d\nerror: %s\n",yylineno,str);
+	fprintf(stderr, "At line: %d\n%s\n",yylineno,str);
 
 }
 
@@ -66,6 +67,8 @@ int flow_key = 0;
 //More temporary pointers. current_args tracks the list of arguments just read
 //So that they can be added to the symbol table for a function definition.
 symbol *tmp_sym, *tmp_sym2, *current_args;
+
+char err_msg[ERRLEN];
 
 %}
 %union{
@@ -188,7 +191,8 @@ type declarator_list ';' 	{
 								int i = find_symbol(t->id, &tmp_sym, local_table);
 								
 								if(tmp_sym->type != t->set->ret_type){
-									yyerror("conflicting types in assignment expression");
+									snprintf(err_msg, ERRLEN, "Error: %s type (%s) conflicts assignment type (%s)\n", tmp_sym->id, print_type(tmp_sym->type), print_type(t->set->ret_type));
+									yyerror(err_msg);
 									return -1;
 								}
 									
@@ -279,8 +283,8 @@ declarator :
 IDENT 			{
 				int i = find_symbol($1, &tmp_sym, local_table);
 				if(tmp_sym != NULL && i == 0){
-					printf("symbol %s\n", $1);
-					yyerror("symbol already declared");
+					snprintf(err_msg, ERRLEN, "Error: %s already declared\n", $1);
+					yyerror(err_msg);
 					return -1;
 				}
 				
@@ -293,8 +297,8 @@ IDENT 			{
 | IDENT assignment expression {
 				int i = find_symbol($1, &tmp_sym, local_table);
 				if(tmp_sym != NULL && i == 0){
-					printf("symbol %s\n", $1);
-					yyerror("symbol already declared");
+					snprintf(err_msg, ERRLEN, "Error: %s already declared\n", $1);
+					yyerror(err_msg);
 					return -1;
 				}
 				
@@ -467,15 +471,18 @@ IDENT assignment expression 	{
 					//Check types
 					int i = find_symbol($1, &tmp_sym, local_table);
 					if(tmp_sym == NULL){
-						yyerror("symbol not found 4");
+						snprintf(err_msg, ERRLEN, "Error: %s undeclared\n", $1);
+						yyerror(err_msg);
 						return -1;
 					}
 					if(tmp_sym->type != $3->ret_type){
-						yyerror("conflicting types in assignment expression");
+						snprintf(err_msg, ERRLEN, "Error: %s type (%s) conflicts assignment type (%s)\n", tmp_sym->id, print_type(tmp_sym->type), print_type($3->ret_type));
+						yyerror(err_msg);
 						return -1;
 					}
 					if(tmp_sym->args != NULL){
-						yyerror("assigning value to function");
+						snprintf(err_msg, ERRLEN, "Error: assigning value to function %s\n", $1);
+						yyerror(err_msg);
 						return -1;
 					}
 
@@ -576,10 +583,7 @@ block_start :
 block_end :  
 '}' 	{
 		//destroy the table, and jump back to the previous block.
-		if(local_table == global_table){
-			yyerror("No block to close");
-			return -1;
-		}
+		
 		current_block->stack_size = local_table->size;
 		last_block = current_block;
 		current_block = current_block->prev;
@@ -783,7 +787,8 @@ expression :
 expression_additive {$$=$1;}
 | expression SHIFTLEFT expression_additive {
 								if($1->ret_type != INTEG || $3->ret_type != INTEG){
-								 	yyerror("left shift requires two integer values");
+								 	snprintf(err_msg, ERRLEN, "Error: left shift requires two integer values. Operands have types %s, %s\n", print_type($1->ret_type), print_type($3->ret_type));
+									yyerror(err_msg);
 									return -1;
 								}
 								tmp = $3;
@@ -805,7 +810,8 @@ expression_additive {$$=$1;}
 							}
 | expression SHIFTRIGHT expression_additive {
 								if($1->ret_type != INTEG || $3->ret_type != INTEG){
-								 	yyerror("right shift requires two integer values");
+								 	snprintf(err_msg, ERRLEN, "Error: right shift requires two integer values. Operands have types %s, %s\n", print_type($1->ret_type), print_type($3->ret_type));
+									yyerror(err_msg);
 									return -1;
 								}
 								tmp = $3;
@@ -865,7 +871,8 @@ expression_multiplicative {$$=$1;}
 							}
 | expression_additive MINUS expression_multiplicative {
 								if($1->ret_type != INTEG || $3->ret_type != INTEG){
-								 	yyerror("subtraction requires two integer values");
+								 	snprintf(err_msg, ERRLEN, "Error: subtraction requires two integer values. Operands have types %s, %s\n", print_type($1->ret_type), print_type($3->ret_type));
+									yyerror(err_msg);
 									return -1;
 								}
 								tmp = $3;
@@ -889,7 +896,8 @@ expression_multiplicative {$$=$1;}
 expression_multiplicative :  
 unary_expression{$$=$1;}
 | expression_multiplicative MULTI unary_expression {		if($1->ret_type != INTEG || $3->ret_type != INTEG){
-								 	yyerror("mulitplication requires two integer values");
+								 	snprintf(err_msg, ERRLEN, "Error: multiplication requires two integer values. Operands have types %s, %s\n", print_type($1->ret_type), print_type($3->ret_type));
+									yyerror(err_msg);
 									return -1;
 								}
 								
@@ -912,7 +920,9 @@ unary_expression{$$=$1;}
 							}
 | expression_multiplicative DIV unary_expression	{
 								if($1->ret_type != INTEG || $3->ret_type != INTEG){
-								 	yyerror("division requires two integer values");
+								 	snprintf(err_msg, ERRLEN, "Error: division requires two integer values. Operands have types %s, %s\n", print_type($1->ret_type), print_type($3->ret_type));
+									yyerror(err_msg);
+									return -1;
 									return -1;
 								}
 								tmp = $3;
@@ -934,7 +944,8 @@ unary_expression{$$=$1;}
 							}
 | expression_multiplicative MODULO unary_expression	{
 								if($1->ret_type != INTEG || $3->ret_type != INTEG){
-								 	yyerror("modulus requires two integer values");
+								 	snprintf(err_msg, ERRLEN, "Error: modulus requires two integer values. Operands have types %s, %s\n", print_type($1->ret_type), print_type($3->ret_type));
+									yyerror(err_msg);
 									return -1;
 								}
 								tmp = $3;
@@ -963,8 +974,8 @@ expression_postfixee {$$=$1;}
 | MINUS unary_expression {
 			 	$$=$2;
 				if($2->ret_type != INTEG){
-					yyerror("minus requires an int");
-					return -1;
+					snprintf(err_msg, ERRLEN, "Error: string cannot be set to negative value\n");
+					yyerror(err_msg);
 				}
 				tmp = $2;
 			 	tmp2 = tmp->next;
@@ -996,12 +1007,13 @@ primary_expression {$$=$1;}
 
 						int i = find_symbol($1, &tmp_sym, local_table);
 						if(tmp_sym == NULL){
-							yyerror("symbol not found 3");
-							return -1;
+							snprintf(err_msg, ERRLEN, "Error: %s undeclared\n", $1);
+							yyerror(err_msg);
 						}
 						$$ = malloc(sizeof(expr));
 						if(tmp_sym->args == NULL){
-							yyerror("expected function call");
+							snprintf(err_msg, ERRLEN, "Error: %s not a function\n", $1);
+							yyerror(err_msg);
 							return -1;
 						}
 						$$->type = tmp_sym->type;
@@ -1015,16 +1027,18 @@ primary_expression {$$=$1;}
 | IDENT '(' ')' 			{
 						int i = find_symbol($1, &tmp_sym, local_table);
 						if(tmp_sym == NULL){
-							yyerror("symbol not found 1");
-							return -1;
+							snprintf(err_msg, ERRLEN, "Error: %s undeclared\n", $1);
+							yyerror(err_msg);
 						}
 						$$ = malloc(sizeof(expr));
 						if(tmp_sym->args == NULL){
-							yyerror("expected function call");
+							snprintf(err_msg, ERRLEN, "Error: %s not a function\n", $1);
+							yyerror(err_msg);
 							return -1;
 						}
 						if(tmp_sym->args[1] != VOID){
-							yyerror("function call types do not match function declaration");
+							snprintf(err_msg, ERRLEN, "Error: function %s expects arguments\n", $1);
+							yyerror(err_msg);
 							return -1;
 						}
 						$$->type = tmp_sym->type;
@@ -1053,7 +1067,8 @@ IDENT  {
 	int i = find_symbol($1, &tmp_sym, local_table);
 
 	if(tmp_sym == NULL){
-		yyerror("symbol not found 2");
+		snprintf(err_msg, ERRLEN, "Error: %s undeclared\n", $1);
+		yyerror(err_msg);
 		return -1;
 	}
 
@@ -1123,7 +1138,10 @@ int main(int argc, char **argv) {
 	local_table = global_table;
 	
 
-	yyparse();
+	if(yyparse() == -1){
+		fprintf(stderr, "Compilation failed. Returning exit status -1\n");
+		return -1;
+	}
 
 	//print out the global vars
 	for(i = 0; i < TABLESIZE; ++i){
