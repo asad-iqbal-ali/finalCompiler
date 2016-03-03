@@ -40,11 +40,6 @@ int stack_depth = 0;
 expr *tmp;
 expr *tmp2;
 
-//Symbols indicating that there are no arguments to an expression or a symbol.
-//These are used to indicate a function with no arguments, while NULL is used
-//to indicate a variable or literal.
-expr *NOARG = 0;
-symbol *NOARGS = 0;
 
 //The major function instruction block, the current block being added to, and the
 //block we just left. The major function block represents all the instructions for
@@ -323,7 +318,7 @@ IDENT '(' ')' 			{	enum type_ *argtype;
 					$$ = malloc(sizeof(declar));
 			 		strcpy($$->id, $1);
 					$$->set = NULL;
-					$$->args = NOARGS;
+					$$->args = NULL;
 					$$->next = NULL;
 					
 		
@@ -541,7 +536,7 @@ block_start :
 			f_def->function = current_function;
 			f_def->args = current_args;
 			tmp_sym = current_args;
-			while(tmp_sym != NULL && tmp_sym != NOARGS){
+			while(tmp_sym != NULL){
 				add_symbol(tmp_sym->id,tmp_sym->type,NULL,ARG,local_table);
 				
 				tmp_sym = tmp_sym->next;
@@ -1014,6 +1009,7 @@ primary_expression {$$=$1;}
 						$$->data = $1;
 						$$->next = NULL;
 						$$->args = $3;
+						$$->func = 1;
 
 					}
 | IDENT '(' ')' 			{
@@ -1035,7 +1031,8 @@ primary_expression {$$=$1;}
 						$$->ret_type = $$->type;
 						$$->data = $1;
 						$$->next = NULL;
-						$$->args = NOARG;
+						$$->args = NULL;
+						$$->func = 1;
 					}//same as above
 ;
 
@@ -1064,7 +1061,7 @@ IDENT  {
 	$$->ret_type = tmp_sym->type;
 
 	if(tmp_sym->args == NULL){
-		
+		$$->func = 0;
 		$$->data = malloc(sizeof(char)*MAXEXPR);
 		if(tmp_sym->scope == GLOBAL){
 			if(tmp_sym->type == STRIN)	
@@ -1080,7 +1077,10 @@ IDENT  {
 		$$->args = NULL;
 	}
 
-	else $$->data = $1;
+	else{
+		$$->data = $1;
+		$$->func = 1;
+	}
 	$$->next = NULL; 
 	}
 | CONST_INT	{
@@ -1388,7 +1388,7 @@ void print_instructions(instr *block){
 
 		i = 0;
 		arg = block->args;
-		while(arg != NULL && arg != NOARGS){
+		while(arg != NULL){
 			++totalargs;
 			//Copy string arguments to the stack.
 			if(arg->type == STRIN){
@@ -1578,7 +1578,7 @@ void print_expr(expr *e, char *function){
 
 			default :
 				//For a simple ident, just print its value.
-				if(e->args == NULL){
+				if(!(e->func)){
 					printf("%s", e->data);
 					if(e->type == SET)
 						--stack_depth;
@@ -1589,15 +1589,15 @@ void print_expr(expr *e, char *function){
 					argcounter = 0;
 					int st = stack_depth;
 					track = e->args;
-					if(track != NOARG){
-						while(track != NULL){
-							print_expr(track, function);
-							if(track->type == STRIN || track->type == INTEG)
-								++argcounter;
-							else --argcounter;
-							track = track->next;
-						}
+					
+					while(track != NULL){
+						print_expr(track, function);
+						if(track->type == STRIN || track->type == INTEG)
+							++argcounter;
+						else --argcounter;
+						track = track->next;
 					}
+					
 					printf("  call %s\n", e->data);
 					printf("  addl $%d, %%esp\n", argcounter*WORDSIZE);
 

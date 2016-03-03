@@ -1,0 +1,5 @@
+#!/bin/bash
+
+gcc -E $1 -o prep.c
+./cstr < prep.c > prep.s
+gcc -m32 lib.o prep.s

@@ -59,11 +59,14 @@ typedef struct symbol_{
 
 typedef struct exp_{
 	enum type_ type;
-	char *data;
 	enum type_ ret_type;
+
+	char *data;
 	struct exp_ *args;
-	char **a_names;
+	int func;
+
 	struct exp_ *next;
+
 	struct instr_ *block;
 } expr;
 
